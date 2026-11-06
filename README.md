@@ -7,8 +7,9 @@ scheduling affect KV cache transfer in disaggregated LLM inference.
 
     ./setup.sh
 
-Builds the simulator and runs a smoke test. Needs cmake (`brew install cmake`)
-and Xcode command line tools. Takes a few minutes the first time.
+Builds the simulator and runs a smoke test. Needs cmake (`brew install cmake`).
+Takes a few minutes the first time. HTSIM source is in this repo, so there is
+nothing to clone.
 
 ## Run one configuration
 
@@ -27,6 +28,7 @@ Runs all four policies and prints a comparison table.
 | | |
 |---|---|
 | `docs/PROJECT.md` | problem, motivation, scope, key references |
+| `HTSIM/OUR_CHANGES.md` | what we changed in the simulator and why |
 | `docs/EXPERIMENTS.md` | E1 to E9, metrics, preliminary results |
 | `TASKS.md` | who does what, week by week |
 | `CLAUDE.md` | context Claude Code reads automatically |

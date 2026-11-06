@@ -1,5 +1,6 @@
-# HTSIM is cloned and patched by setup.sh, not committed
-HTSIM/
+# build output
+HTSIM/htsim/sim/build/
+HTSIM/htsim/sim/datacenter/htsim_*
 
 # raw simulator logs are large; the parsed CSVs are what we keep
 results/*.log

@@ -45,21 +45,32 @@ Always take the max across a request's flows, never the mean.
 
 ## Layout
 
-    HTSIM/          simulator, cloned and patched
+    HTSIM/          simulator source, vendored and already fixed
+    HTSIM/OUR_CHANGES.md    what we changed and why
+    docs/PROJECT.md         problem, motivation, scope, references
+    docs/EXPERIMENTS.md     E1-E9, metrics, preliminary results
+    TASKS.md        who does what, week by week
     workloads/      .cm traffic matrices
-    scripts/        run.sh harness, parse.py output parser
+    scripts/        run.sh, sweep.sh, parse.py
     results/        one CSV per run, named <cc>_<topo>_<load>.csv
-    htsim-dcqcn-fix.patch   our DCQCN fixes, already applied
 
 ## Quick start
 
     ./setup.sh                                  # build + smoke test
     ./scripts/run.sh hpcc default load100 workloads/kv_llama70b_4k_tp8.cm
+    ./scripts/sweep.sh workloads/kv_llama70b_4k_tp8.cm   # all four CC policies
+
+## Editing the simulator
+
+HTSIM source is vendored in this repo, not cloned. Edit it directly and commit
+like any other code. There is no patch file to regenerate and no fork to keep
+in sync. See HTSIM/OUR_CHANGES.md for what we already changed.
 
 ## The simulator
 
-HTSIM is the Ultra Ethernet Consortium reference simulator. We use the ETH
-Zurich SPCL fork, https://github.com/spcl/HTSIM, at commit ac1aea6.
+HTSIM is the Ultra Ethernet Consortium reference simulator. We vendored the
+ETH Zurich SPCL fork, https://github.com/spcl/HTSIM, at commit ac1aea6, and
+pruned the Dragonfly and SlimFly artifacts we do not use.
 
 **Build targets are not default.** Plain `cmake --build build` gives only the
 UEC binaries. Name the targets:
@@ -75,8 +86,8 @@ UEC binaries. Name the targets:
 1. `-dcqcn` **takes an argument** (ECN threshold). `-dcqcn -strat ecmp_host`
    silently eats the `-strat` and you get "Unknown parameter ecmp_host".
 2. Stock DCQCN **never terminates**. `_last_alpha_update` is never assigned in
-   `DCQCNSrc::doNextEvent`, so the rate timer re-arms forever. Already fixed in
-   this clone. Do not `git checkout` those files.
+   `DCQCNSrc::doNextEvent`, so the rate timer re-arms forever. **Already fixed
+   in this repo.** Do not revert it.
 3. Default buffers are far too small for 400 Gbps. Without
    `-q 500 -pfc_thresholds 80 150` you get hundreds of thousands of
    "LOSSLESS not working" violations. **Any run with nonzero violations is
