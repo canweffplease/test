@@ -1,0 +1,10 @@
+# HTSIM is cloned and patched by setup.sh, not committed
+HTSIM/
+
+# raw simulator logs are large; the parsed CSVs are what we keep
+results/*.log
+
+.DS_Store
+__pycache__/
+*.pyc
+.venv/

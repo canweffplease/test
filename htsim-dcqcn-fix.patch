@@ -1,0 +1,82 @@
+diff --git a/htsim/sim/datacenter/fat_tree_topology.cpp b/htsim/sim/datacenter/fat_tree_topology.cpp
+index 5908524..0e7e615 100755
+--- a/htsim/sim/datacenter/fat_tree_topology.cpp
++++ b/htsim/sim/datacenter/fat_tree_topology.cpp
+@@ -497,7 +497,7 @@ void FatTreeTopologyCfg::set_params(uint32_t no_of_nodes) {
+     
+     cout << "_no_of_nodes " << _no_of_nodes << endl;
+     cout << "K " << K << endl;
+-    cout << "Queue type " << _qt << endl;
++    //cout << "Queue type " << _qt << endl;
+ 
+     // if these are set, we should be in the custom code, not here
+     assert(_radix_down[TOR_TIER] == 0); 
+diff --git a/htsim/sim/dcqcn.cpp b/htsim/sim/dcqcn.cpp
+index 07ad36e..bafe81a 100755
+--- a/htsim/sim/dcqcn.cpp
++++ b/htsim/sim/dcqcn.cpp
+@@ -63,11 +63,11 @@ void DCQCNSrc::processCNP(const CNPPacket& cnp){
+     _byte_counter = 0;
+     _old_highest_sent = _highest_sent;
+ 
+-    cout << "At " << timeAsUs(eventlist().now()) << " " << _RC << " CNP received, reduced rate; target rate is " << _RT << " node " << nodename() << " alpha is " << _alpha;
++    //cout << "At " << timeAsUs(eventlist().now()) << " " << _RC << " CNP received, reduced rate; target rate is " << _RT << " node " << nodename() << " alpha is " << _alpha;
+ 
+     _pacing_rate = _RC;
+     update_spacing();
+-    cout << " packet spacing is " << timeAsUs(_packet_spacing) << endl;
++    //cout << " packet spacing is " << timeAsUs(_packet_spacing) << endl;
+ 
+     _last_cc_update = eventlist().now();
+     _last_alpha_update = eventlist().now();
+@@ -104,7 +104,7 @@ void DCQCNSrc::increaseRate(){
+     _pacing_rate = _RC;
+     update_spacing();
+ 
+-    cout << "At " << timeAsUs(eventlist().now()) << " " << _RC << " increase target rate is " << _RT << " node " << nodename() << " packet spacing is " << timeAsUs(_packet_spacing) << " _T is " << _T << " _BC is " << _BC << " byte counter is " << _byte_counter << " alpha is " << _alpha << endl;
++    //cout << "At " << timeAsUs(eventlist().now()) << " " << _RC << " increase target rate is " << _RT << " node " << nodename() << " packet spacing is " << timeAsUs(_packet_spacing) << " _T is " << _T << " _BC is " << _BC << " byte counter is " << _byte_counter << " alpha is " << _alpha << endl;
+ }
+ 
+ void DCQCNSrc::doNextEvent(){
+@@ -112,7 +112,10 @@ void DCQCNSrc::doNextEvent(){
+ 
+     RoceSrc::doNextEvent();
+ 
+-    cout << "Adding " << (_highest_sent - _old_highest_sent) << " to sent bytes " << _byte_counter << " " << _highest_sent << endl;
++    if (_done)                                    // FIX: stop timer when done
++        return;
++
++    //cout << "Adding " << (_highest_sent - _old_highest_sent) << " to sent bytes " << _byte_counter << " " << _highest_sent << endl;
+ 
+     _byte_counter += (_highest_sent - _old_highest_sent);
+     _old_highest_sent = _highest_sent;
+@@ -127,6 +130,7 @@ void DCQCNSrc::doNextEvent(){
+ 
+     if (eventlist().now()-_last_alpha_update >= _cc_update_period){
+         _alpha = (1-_g)*_alpha;
++        _last_alpha_update = eventlist().now();   // FIX: was never assigned
+         reschedule = true;
+     }    
+ 
+diff --git a/htsim/sim/roce.cpp b/htsim/sim/roce.cpp
+index 331e09b..4bbd987 100755
+--- a/htsim/sim/roce.cpp
++++ b/htsim/sim/roce.cpp
+@@ -225,7 +225,7 @@ void RoceSrc::processPause(const EthPausePacket& p) {
+         //we are allowed to send!
+         //assert(_state_send != READY);
+         _state_send = READY;
+-        cout << "Source " << str() << " RESUME " << timeAsUs(eventlist().now()) << endl;
++        //cout << "Source " << str() << " RESUME " << timeAsUs(eventlist().now()) << endl;
+         eventlist().sourceIsPendingRel(*this,0);
+     }
+ }
+@@ -322,7 +322,7 @@ void RoceSrc::doNextEvent() {
+         if (_log_me) 
+             cout << "Src " << get_id() << " paused\n";
+ 
+-        cout << "PAUSE" << endl;
++        //cout << "PAUSE" << endl;
+         return;
+     }
+ 
