@@ -124,3 +124,25 @@ Only at 8:1 does the pod boundary become the bottleneck.
 This means the current hand-written matrices are too light to exercise the
 topology axis at all. E2 needs the real workload generator with enough
 offered load to saturate pod uplinks, not a handful of flows.
+
+## Our own bug: floor computed against the wrong link speed
+
+`parse.py` assumed 400 Gbps. A topology file sets its own link speeds and
+overrides the `-linkspeed` flag, and all three `fat_tree_128_*` configs
+specify `Downlink_speed_Gbps 100`. So every 128-node result was divided by a
+floor four times too small and looked four times worse than it was.
+
+| | reported | correct |
+|---|---|---|
+| ft128_1os | 12.20x floor | 3.05x |
+| ft128_4os | 12.20x floor | 3.05x |
+| ft128_8os | 20.35x floor | 5.09x |
+
+`run.sh` now reads the tier-0 downlink speed out of the topology file and
+passes it to `parse.py`, and prints which speed it used on every run.
+
+The corrected 1:1 number, 3.05x, is identical to the 16-node no-congestion-
+control result, which is a useful sanity check: the same policy on the same
+traffic gets the same distance from floor regardless of link speed. That is
+exactly what normalizing to the floor is supposed to buy us, and it only
+worked once the floor was right.

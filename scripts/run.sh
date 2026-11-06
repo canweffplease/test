@@ -35,18 +35,28 @@ CSV="$HERE/results/${TAG}.csv"
 # Buffer size is per-topology: 8:1 needs 2000 packets or PFC fails and the
 # run produces hundreds of thousands of lossless violations.
 case "$TOPO" in
-  default)    TOPOARG="";                                    NODES=16;  Q=500  ;;
-  ft128_1os)  TOPOARG="-topo $TOPODIR/fat_tree_128_1os.topo"; NODES=128; Q=500  ;;
-  ft128_4os)  TOPOARG="-topo $TOPODIR/fat_tree_128_4os.topo"; NODES=128; Q=500  ;;
-  ft128_8os)  TOPOARG="-topo $TOPODIR/fat_tree_128_8os.topo"; NODES=128; Q=2000 ;;
+  default)    TOPOARG="";                                    NODES=16;  Q=500;  GBPS=400 ;;
+  ft128_1os)  TOPOARG="-topo $TOPODIR/fat_tree_128_1os.topo"; NODES=128; Q=500;  GBPS=0   ;;
+  ft128_4os)  TOPOARG="-topo $TOPODIR/fat_tree_128_4os.topo"; NODES=128; Q=500;  GBPS=0   ;;
+  ft128_8os)  TOPOARG="-topo $TOPODIR/fat_tree_128_8os.topo"; NODES=128; Q=2000; GBPS=0   ;;
   *)
     F="$TOPODIR/${TOPO}.topo"
     [ -f "$F" ] || { echo "no such topology: $F"; exit 1; }
     TOPOARG="-topo $F"
     NODES=$(awk 'tolower($1)=="nodes"{print $2; exit}' "$F")
     Q=2000
+    GBPS=0
     ;;
 esac
+
+# A topology file sets its own link speeds and overrides -linkspeed. Read the
+# host-facing (tier 0) downlink speed out of the file so the theoretical floor
+# is computed against the real bottleneck, not the flag we passed.
+if [ "$GBPS" = "0" ]; then
+  TOPOF=$(echo "$TOPOARG" | awk '{print $2}')
+  GBPS=$(awk 'tolower($1)=="downlink_speed_gbps"{print $2; exit}' "$TOPOF")
+  : "${GBPS:=400}"
+fi
 
 # node count must match the traffic matrix or htsim refuses
 TM_NODES=$(awk 'tolower($1)=="nodes"{print $2; exit}' "$TM_ABS")
@@ -71,8 +81,8 @@ esac
 [ -x "$EXE" ] || { echo "missing binary $EXE - run ./setup.sh first"; exit 1; }
 
 cd "$HERE/HTSIM/htsim/sim/datacenter"
-echo "running $TAG ..."
+echo "running $TAG ... (link ${GBPS} Gbps)"
 START=$(date +%s)
 $EXE $COMMON $ARGS -tm "$TM_ABS" > "$LOG" 2>&1 || true
 echo "  wall $(( $(date +%s)-START ))s"
-python3 "$HERE/scripts/parse.py" "$LOG" "$CSV" "$TAG" "$TM_ABS"
+python3 "$HERE/scripts/parse.py" "$LOG" "$CSV" "$TAG" "$TM_ABS" "$GBPS"
