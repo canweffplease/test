@@ -31,3 +31,16 @@ record and for a future upstream pull request.
 Dragonfly and SlimFly topology artifacts, the `experiments/` directory, and
 checked-in `results/`. None are used by this project. Pull them from upstream
 if ever needed.
+
+## macOS portability
+
+**`htsim/sim/data_collector.h`**, **`htsim/sim/loggertypes.h`** — added
+`#include <cstdint>`.
+
+These use fixed-width integer types but were the only two headers that did not
+reach `<stdint.h>` through `config.h`. GNU libstdc++ supplies it transitively,
+Apple's libc++ does not, so they would likely fail to compile on macOS.
+Upstream CI only runs `ubuntu-latest`, so this is untested territory for them.
+
+Otherwise the codebase is portable: C++17, no `__linux__` guards, no
+Linux-only headers, no static linking, no variable-length arrays.

@@ -1,6 +1,8 @@
 #ifndef HTSIM_SIM_DATA_COLLECTOR_H_
 #define HTSIM_SIM_DATA_COLLECTOR_H_
 
+#include <cstdint>   // portability: libc++ (macOS) does not
+                     // provide this transitively
 #include <fstream>
 #include <iostream>
 #include <map>

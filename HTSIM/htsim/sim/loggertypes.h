@@ -1,6 +1,8 @@
 // -*- c-basic-offset: 4; indent-tabs-mode: nil -*-        
 #ifndef LOGGERTYPES_H
 #define LOGGERTYPES_H
+#include <cstdint>   // portability: libc++ (macOS) does not
+                     // provide this transitively
 #include <vector>
 
 class Packet;

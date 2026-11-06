@@ -79,6 +79,8 @@ UEC binaries. Name the targets:
 
 - DCQCN lives inside `htsim_roce` behind `-dcqcn`, not its own binary
 - `htsim_ndp` does not link, ignore it
+- Upstream CI only tests Ubuntu. We added two `<cstdint>` includes for macOS;
+  if you hit other portability errors, fix and note them in OUR_CHANGES.md
 - `htsim_swift` builds but rejects our `-strat` args, invocation unresolved
 
 ### Three gotchas that will cost you an afternoon
