@@ -1,35 +1,51 @@
 #!/usr/bin/env bash
-# E3: run every congestion control policy on one workload.
+# Run every congestion control policy N times on one workload and report
+# the median slowest-shard time, plus the spread across repetitions.
 #
-#   ./scripts/sweep.sh <traffic-matrix> [topo-label] [load-label]
+#   ./scripts/sweep.sh <traffic-matrix> [topo-label] [load-label] [reps]
 #
-# Example:
-#   ./scripts/sweep.sh workloads/kv_llama70b_4k_tp8.cm default load100
+# Repetitions matter: HPCC is not deterministic across identical runs, so a
+# single run can read anywhere from 2.0x to 3.2x floor. Default 5 reps.
 set -euo pipefail
 TM=${1:?path to .cm traffic matrix}
 TOPO=${2:-default}
 LOAD=${3:-load100}
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPS=${4:-5}
 
-echo "E3 sweep on $(basename "$TM")  topo=$TOPO  load=$LOAD"
-echo "note: dcqcn takes ~90s, the rest are ~1s"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUILD_DIR="${HTSIM_BUILD:-build}"
+BIN="$HERE/HTSIM/htsim/sim/$BUILD_DIR/datacenter"
+TM_ABS="$(cd "$(dirname "$TM")" && pwd)/$(basename "$TM")"
+mkdir -p "$HERE/results"
+RAW="$HERE/results/sweep_${TOPO}_${LOAD}.raw"
+: > "$RAW"
+
+COMMON="-nodes 16 -strat ecmp_host -paths 16 -linkspeed 400000 -end 200000 -q 500"
+
+echo "sweep on $(basename "$TM")  topo=$TOPO  load=$LOAD  reps=$REPS"
+echo "note: dcqcn is ~70s per rep, the others are ~1-25s"
 echo
-for CC in hpcc eqds roce dcqcn; do
-  "$HERE/scripts/run.sh" "$CC" "$TOPO" "$LOAD" "$TM" || echo "  $CC FAILED, continuing"
+
+cd "$HERE/HTSIM/htsim/sim/datacenter"
+for CC in eqds hpcc roce dcqcn; do
+  case "$CC" in
+    dcqcn) EXE="$BIN/htsim_roce"; ARGS="-dcqcn 100 -pfc_thresholds 80 150" ;;
+    roce)  EXE="$BIN/htsim_roce"; ARGS="-pfc_thresholds 80 150" ;;
+    hpcc)  EXE="$BIN/htsim_hpcc"; ARGS="" ;;
+    eqds)  EXE="$BIN/htsim_eqds"; ARGS="" ;;
+  esac
+  [ -x "$EXE" ] || { echo "missing $EXE, run ./setup.sh"; exit 1; }
+  printf "%-6s" "$CC"
+  for i in $(seq 1 "$REPS"); do
+    OUT=$($EXE $COMMON $ARGS -tm "$TM_ABS" 2>/dev/null || true)
+    if echo "$OUT" | grep -q "LOSSLESS not working"; then
+      echo " REP $i INVALID (lossless violations)"; continue
+    fi
+    V=$(echo "$OUT" | grep -o "finished at [0-9.]*" | awk '{print $3}' | sort -g | tail -1)
+    [ -n "$V" ] && { printf " %s" "$V"; echo "$CC $V" >> "$RAW"; } || printf " FAIL"
+  done
   echo
 done
 
-echo "=== summary ==="
-python3 - "$HERE/results" "$TOPO" "$LOAD" <<'PYEOF'
-import csv, glob, os, sys
-d, topo, load = sys.argv[1], sys.argv[2], sys.argv[3]
-print(f"{'policy':<8}{'last shard us':>15}{'floor us':>12}{'x floor':>10}")
-for cc in ("hpcc","eqds","roce","dcqcn"):
-    p = os.path.join(d, f"{cc}_{topo}_{load}.csv")
-    if not os.path.exists(p):
-        print(f"{cc:<8}{'(no result)':>15}"); continue
-    rows = list(csv.DictReader(open(p)))
-    last = max(float(r["completion_us"]) for r in rows)
-    floor = float(rows[0]["floor_us"])
-    print(f"{cc:<8}{last:>15.1f}{floor:>12.1f}{last/floor:>10.2f}")
-PYEOF
+echo
+python3 "$HERE/scripts/summarize.py" "$RAW" "$TM_ABS"

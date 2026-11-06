@@ -15,7 +15,8 @@ LOAD=${3:-load100}
 TM=${4:?path to .cm traffic matrix}
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BIN="$HERE/HTSIM/htsim/sim/build/datacenter"
+BUILD_DIR="${HTSIM_BUILD:-build}"
+BIN="$HERE/HTSIM/htsim/sim/$BUILD_DIR/datacenter"
 TM_ABS="$(cd "$(dirname "$TM")" && pwd)/$(basename "$TM")"
 mkdir -p "$HERE/results"
 TAG="${CC}_${TOPO}_${LOAD}"
@@ -40,4 +41,4 @@ echo "running $TAG ..."
 START=$(date +%s)
 $EXE $COMMON $ARGS -tm "$TM_ABS" > "$LOG" 2>&1 || true
 echo "  wall $(( $(date +%s)-START ))s"
-python3 "$HERE/scripts/parse.py" "$LOG" "$CSV" "$TAG"
+python3 "$HERE/scripts/parse.py" "$LOG" "$CSV" "$TAG" "$TM_ABS"

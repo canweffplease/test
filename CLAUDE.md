@@ -95,16 +95,34 @@ UEC binaries. Name the targets:
 
 ## Reference numbers
 
-One Llama-3-70B 4K cache, TP=8, 16-node fat tree, 400 Gbps, matched buffers:
+One Llama-3-70B 4K cache, TP=8, 16-node fat tree, 400 Gbps, matched buffers.
+Median slowest shard across repetitions. Floor is 3,355 us.
 
-| | Last shard | Floor | Ratio |
+| policy | median | x floor | spread over reps |
 |---|---|---|---|
-| DCQCN | 12,098 us | 3,355 us | 3.61x |
-| HPCC | 7,137 us | 3,355 us | 2.13x |
+| EQDS | 4,165 us | 1.24 | 0% |
+| HPCC | 6,797 us | 2.03 | **58%** |
+| RoCE, no CC | 10,240 us | 3.05 | 0% |
+| DCQCN | 12,098 us | 3.61 | 0% |
 
 If your numbers differ wildly, something is misconfigured.
 
-DCQCN takes ~90s per run, HPCC ~1s. Budget sweeps around DCQCN.
+DCQCN takes ~70s per run, the others 1-25s. Budget sweeps around DCQCN.
+
+## Runs are NOT deterministic
+
+Identical commands give different answers. HPCC ranged 6,796 to 10,710 us
+over nine repetitions. `-seed` does not fix it.
+
+**Never report a single run.** Use `./scripts/sweep.sh`, which repeats and
+reports median plus spread. Any difference smaller than a policy's own spread
+is noise, not a result.
+
+## Do not trust "total bytes" in the logs
+
+Different transports print different things under that label. RoCE prints a
+packet count, EQDS prints real bytes. `parse.py` takes flow sizes from the
+traffic matrix instead, which is always correct.
 
 ## Cache size arithmetic
 

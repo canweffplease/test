@@ -9,3 +9,6 @@ results/*.log
 __pycache__/
 *.pyc
 .venv/
+
+# linux build made inside the Cowork VM; macOS build goes in build/
+HTSIM/htsim/sim/build-linux/
