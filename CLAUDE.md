@@ -63,8 +63,16 @@ Always take the max across a request's flows, never the mean.
 ## Editing the simulator
 
 HTSIM source is vendored in this repo, not cloned. Edit it directly and commit
-like any other code. There is no patch file to regenerate and no fork to keep
-in sync. See HTSIM/OUR_CHANGES.md for what we already changed.
+like any other code. See HTSIM/OUR_CHANGES.md for what we already changed.
+
+After changing anything under HTSIM/, run `./scripts/diff-upstream.sh` to
+refresh `docs/htsim-changes-vs-upstream.patch`. That file is the only record
+of how we differ from the original, since we removed HTSIM's own git history
+when vendoring it. It is also what we would submit upstream.
+
+To undo a change: `git log -- HTSIM/path/to/file.cpp` then
+`git checkout <commit> -- HTSIM/path/to/file.cpp`. Every edit is committed,
+so nothing is unrecoverable.
 
 ## The simulator
 
