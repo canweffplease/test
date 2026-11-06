@@ -7,12 +7,16 @@ Check things off here. Owner column is a suggestion, swap as needed.
 - [ ] Everyone clones this repo and runs `./setup.sh` successfully — all five
 - [x] ~~Verify `.topo` files load.~~ They did not. Upstream bug found and
       fixed, see HTSIM/OUR_CHANGES.md. 1:1 now works.
-- [ ] **Oversubscribed topologies still do not complete.** `fat_tree_128_4os`
-      and `_8os` start every flow and finish none, even at 5 simulated
-      seconds, where 1:1 finishes in 14 ms. Find out whether PFC deadlocks on
-      oversubscribed aggregation uplinks or the radix arithmetic produces an
-      unroutable fabric. **This blocks E2 and E5, half the core experiments.**
-      — Matt
+- [x] ~~Oversubscribed topologies do not complete.~~ They do. EQDS aborts on
+      them (separate bug), and 8:1 needs `-q 2000`. RoCE and DCQCN work on
+      all three. `run.sh` now takes a real topology argument.
+- [ ] **The workload is too light to exercise topology.** 1:1 and 4:1 give
+      identical times because eight flows never saturate the pod uplinks.
+      E2 needs the generator producing enough offered load to make
+      oversubscription bind. **This is now the critical path.** — Vasili
+- [ ] Investigate why `htsim_eqds` aborts on oversubscribed fabrics. Five
+      bare `abort()` calls in eqds.cpp, one is being hit. Low priority,
+      three of four policies work without it. — Chris
 - [ ] Run E1, the uncontended per-tier cost table, using hand written
       matrices. Do not wait for the generator. — Quincy
 - [ ] Download and parse the Azure LLM Inference trace — Vasili

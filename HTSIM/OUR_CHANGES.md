@@ -90,3 +90,37 @@ Those two files differ from 1os only in Tier 1:
 
 Next step is to find out whether oversubscribed aggregation uplinks deadlock
 under PFC, or whether the radix arithmetic produces an unroutable fabric.
+
+## Oversubscribed fat trees: resolved, mostly
+
+After the `set_queue_sizes` fix above, 4:1 and 8:1 still appeared to hang.
+They were not hanging. Two separate things were happening.
+
+**EQDS aborts on oversubscribed fabrics (still unresolved).** `htsim_eqds`
+exits with SIGABRT, no message, immediately after starting all flows. There
+are five bare `abort()` calls in `eqds.cpp`; one of them is being hit. RoCE
+and DCQCN run the same configuration fine, so this is an EQDS bug, not a
+topology problem. `run.sh` refuses the combination rather than producing a
+silent failure.
+
+**8:1 needs bigger buffers.** At `-q 500` it completes but reports 324,586
+lossless violations, meaning PFC failed and the numbers are meaningless. At
+`-q 2000` the violations go to zero and the completion time is unchanged.
+`run.sh` now sets the buffer per topology.
+
+### Working, RoCE, same traffic, 128 nodes
+
+| topology | slowest shard | lossless violations |
+|---|---|---|
+| fat_tree_128_1os | 40,924 us | 0 |
+| fat_tree_128_4os | 40,924 us | 0 |
+| fat_tree_128_8os | 68,284 us | 0 at -q 2000 |
+
+**1:1 and 4:1 are identical, and that is a result about our workload, not
+the fabric.** Eight concurrent flows do not generate enough cross-pod traffic
+to saturate the aggregation uplinks, so 4:1 oversubscription never binds.
+Only at 8:1 does the pod boundary become the bottleneck.
+
+This means the current hand-written matrices are too light to exercise the
+topology axis at all. E2 needs the real workload generator with enough
+offered load to saturate pod uplinks, not a handful of flows.
