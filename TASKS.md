@@ -5,9 +5,14 @@ Check things off here. Owner column is a suggestion, swap as needed.
 ## Now, this week
 
 - [ ] Everyone clones this repo and runs `./setup.sh` successfully — all five
-- [ ] Verify `.topo` files load: `-topo topologies/fat_tree_1024_4os.topo`
-      and `fat_tree_1024_1os.topo`. Confirm 4:1 is measurably slower on
-      identical traffic. **Highest-risk unknown.** — Matt
+- [x] ~~Verify `.topo` files load.~~ They did not. Upstream bug found and
+      fixed, see HTSIM/OUR_CHANGES.md. 1:1 now works.
+- [ ] **Oversubscribed topologies still do not complete.** `fat_tree_128_4os`
+      and `_8os` start every flow and finish none, even at 5 simulated
+      seconds, where 1:1 finishes in 14 ms. Find out whether PFC deadlocks on
+      oversubscribed aggregation uplinks or the radix arithmetic produces an
+      unroutable fabric. **This blocks E2 and E5, half the core experiments.**
+      — Matt
 - [ ] Run E1, the uncontended per-tier cost table, using hand written
       matrices. Do not wait for the generator. — Quincy
 - [ ] Download and parse the Azure LLM Inference trace — Vasili

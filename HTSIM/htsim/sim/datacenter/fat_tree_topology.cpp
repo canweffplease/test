@@ -418,6 +418,13 @@ void FatTreeTopologyCfg::set_linkspeeds(linkspeed_bps linkspeed) {
 }
 
 void FatTreeTopologyCfg::set_queue_sizes(mem_b queuesize) {
+    // FIX: the from-file constructor calls initialize(..., 0u, ...) after
+    // read_cfg() has already set queue sizes, which wiped them back to zero
+    // and made every .topo file fail check_consistency() with
+    // "Missing queue_up for tier 0". Treat 0 as "already configured", the
+    // same way set_tiers() and set_linkspeeds() treat 0.
+    if (queuesize == 0)
+        return;
     // all tiers use the same queuesize
     for (int tier = TOR_TIER; tier <= CORE_TIER; tier++) {
         _queue_down[tier] = queuesize;
