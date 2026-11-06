@@ -6,7 +6,40 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$HERE"
 
 echo "==> prerequisites"
-command -v cmake   >/dev/null || { echo "cmake missing -> brew install cmake"; exit 1; }
+
+# cmake is often installed somewhere that is not on PATH in a fresh shell,
+# e.g. a pip --user install or the Kitware app bundle. Look in the usual
+# places before giving up.
+if ! command -v cmake >/dev/null 2>&1; then
+  for d in /Applications/CMake.app/Contents/bin \
+           "$HOME"/Library/Python/3.*/bin \
+           "$HOME"/.local/bin \
+           /opt/homebrew/bin \
+           /usr/local/bin; do
+    if [ -x "$d/cmake" ]; then
+      export PATH="$d:$PATH"
+      echo "    found cmake in $d (not on your PATH)"
+      echo "    to make that permanent:  echo 'export PATH=\"$d:\$PATH\"' >> ~/.zshrc"
+      break
+    fi
+  done
+fi
+
+if ! command -v cmake >/dev/null 2>&1; then
+  cat <<'MSG'
+cmake not found. Fastest install, no compiling:
+
+    pip3 install --user cmake
+
+then reopen Terminal, or add its bin directory to PATH. Alternatively grab
+the official universal binary from https://cmake.org/download/
+
+Do NOT use "brew install cmake" unless a bottle exists for your macOS
+version; otherwise Homebrew compiles it from source and that takes ages.
+MSG
+  exit 1
+fi
+
 command -v python3 >/dev/null || { echo "python3 missing"; exit 1; }
 cmake --version | head -1
 
