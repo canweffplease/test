@@ -14,8 +14,10 @@ if ! command -v cmake >/dev/null 2>&1; then
   for d in /Applications/CMake.app/Contents/bin \
            "$HOME"/Library/Python/3.*/bin \
            "$HOME"/.local/bin \
+           "$HOME"/.local/lib/python3.*/site-packages/cmake/data/bin \
            /opt/homebrew/bin \
-           /usr/local/bin; do
+           /usr/local/bin \
+           /usr/bin; do
     if [ -x "$d/cmake" ]; then
       export PATH="$d:$PATH"
       echo "    found cmake in $d (not on your PATH)"
@@ -27,15 +29,18 @@ fi
 
 if ! command -v cmake >/dev/null 2>&1; then
   cat <<'MSG'
-cmake not found. Fastest install, no compiling:
+cmake not found. Works on any platform, no compiling:
 
     pip3 install --user cmake
 
-then reopen Terminal, or add its bin directory to PATH. Alternatively grab
-the official universal binary from https://cmake.org/download/
+then reopen your terminal, or add its bin directory to PATH.
 
-Do NOT use "brew install cmake" unless a bottle exists for your macOS
-version; otherwise Homebrew compiles it from source and that takes ages.
+  Linux  : sudo apt install cmake g++      (or dnf/pacman equivalent)
+  macOS  : official universal binary from https://cmake.org/download/
+           Avoid "brew install cmake" unless a bottle exists for your macOS
+           version, otherwise Homebrew compiles it from source and that
+           takes a very long time.
+  Windows: this project needs WSL2. See README.md.
 MSG
   exit 1
 fi
