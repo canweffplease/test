@@ -12,3 +12,4 @@ __pycache__/
 
 # linux build made inside the Cowork VM; macOS build goes in build/
 HTSIM/htsim/sim/build-linux/
+data/
