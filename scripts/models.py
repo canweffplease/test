@@ -33,13 +33,33 @@ MAX_FLOW_BYTES = 2 ** 31 - 1
 
 
 class Model:
-    def __init__(self, name, layers, kv_heads, head_dim, hidden, dtype="fp16"):
+    def __init__(self, name, layers, kv_heads, head_dim, hidden, params,
+                 dtype="fp16"):
         self.name = name
         self.layers = layers
         self.kv_heads = kv_heads
         self.head_dim = head_dim
-        self.hidden = hidden          # kept only for the sanity check below
+        self.hidden = hidden          # for the sanity check and the FLOP ratio
+        self.params = params          # total parameter count, for prefill cost
         self.dtype = dtype
+
+    @property
+    def attn_flop_ratio(self):
+        """beta / alpha in the prefill cost model, derived not fitted.
+
+        Prefill FLOPs are roughly
+
+            GEMM      ~ 2 * params * P          (linear in prompt length)
+            attention ~ 4 * layers * hidden * P^2
+
+        so the ratio of the quadratic to the linear coefficient is fixed by
+        the architecture. DistServe models prefill the same way, a GEMM term
+        linear in total tokens plus a FlashAttention term quadratic in
+        per-request length. Splitwise measures TTFT growing almost linearly
+        with prompt size, which is consistent: this ratio puts attention at
+        1.9 percent of Llama-3-70B prefill at 1K tokens and 7.1 percent at 4K.
+        """
+        return (4.0 * self.layers * self.hidden) / (2.0 * self.params)
 
     @property
     def bytes_per_token(self):
@@ -86,10 +106,10 @@ class Model:
 
 
 MODELS = {
-    # name          layers  kv_heads  head_dim  hidden
-    "llama3-8b":  Model("llama3-8b",  32,  8, 128, 4096),
-    "llama2-13b": Model("llama2-13b", 40, 40, 128, 5120),
-    "llama3-70b": Model("llama3-70b", 80,  8, 128, 8192),
+    # name          layers kv_heads head_dim hidden  params
+    "llama3-8b":  Model("llama3-8b",  32,  8, 128, 4096,  8.0e9),
+    "llama2-13b": Model("llama2-13b", 40, 40, 128, 5120, 13.0e9),
+    "llama3-70b": Model("llama3-70b", 80,  8, 128, 8192, 70.0e9),
 }
 
 
