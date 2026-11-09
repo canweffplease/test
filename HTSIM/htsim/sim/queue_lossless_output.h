@@ -6,6 +6,7 @@
  */
 
 #include <list>
+#include <random>
 #include "queue.h"
 #include "config.h"
 #include "eventlist.h"
@@ -38,6 +39,26 @@ private:
 public:
     static int _ecn_enabled;
     static int _K;
+
+    // Probabilistic (RED-style) ECN marking, DCQCN paper (Zhu et al.,
+    // SIGCOMM 2015), congestion point (CP) RED curve, Fig. 5. Off by default: then the step rule
+    // "mark if _queuesize > _K" above is used unchanged. Enabled from
+    // main_roce.cpp by -ecn_kmin/-ecn_kmax/-ecn_pmax (HTSIM/OUR_CHANGES.md (section "DCQCN switch marking: probabilistic (RED) ECN")).
+    // Marking probability on the instantaneous queue q (bytes, at dequeue):
+    //   0 if q <= Kmin,  Pmax*(q-Kmin)/(Kmax-Kmin) if Kmin < q <= Kmax,  1 if q > Kmax.
+    // Only data packets (type ROCE) are marked or consume random draws.
+    static bool _ecn_red;
+    static mem_b _ecn_kmin;
+    static mem_b _ecn_kmax;
+    static double _ecn_pmax;
+    static void enable_red(mem_b kmin, mem_b kmax, double pmax, unsigned seed);
+    // one decision: 0 = no mark, 1 = probabilistic mark, 2 = forced (q > Kmax).
+    // Draws from _ecn_rng only if Kmin < q <= Kmax.
+    static int red_mark(mem_b q);
+    static uint64_t _ecn_seen, _ecn_drawn, _ecn_marked_prob, _ecn_marked_forced;  // data packets only
+private:
+    static std::mt19937_64 _ecn_rng;  // own stream, seeded from -seed, so marking draws
+                                      // do not shift the global rand() stream used elsewhere
 };
 
 #endif

@@ -1,9 +1,0 @@
-tag,flow,completion_us,bytes,floor_us,x_floor
-eqds_default_smoketest,Eqds_2_10,3585.04,167772160,3355.4,1.068
-eqds_default_smoketest,Eqds_7_15,3621.47,167772160,3355.4,1.079
-eqds_default_smoketest,Eqds_1_9,3808.71,167772160,3355.4,1.135
-eqds_default_smoketest,Eqds_4_12,3822.93,167772160,3355.4,1.139
-eqds_default_smoketest,Eqds_6_14,3865.41,167772160,3355.4,1.152
-eqds_default_smoketest,Eqds_3_11,3995.15,167772160,3355.4,1.191
-eqds_default_smoketest,Eqds_5_13,4002.48,167772160,3355.4,1.193
-eqds_default_smoketest,Eqds_0_8,4164.7,167772160,3355.4,1.241

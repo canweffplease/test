@@ -26,11 +26,22 @@ using namespace std;
    large incasts. */
 uint32_t HPCCSrc::_global_node_count = 0;
 
-simtime_picosec HPCCSrc::_T = timeFromUs(12.0);//Known baseline RTT
+// Known baseline RTT. Was 12 us, the propagation-only RTT of the default
+// 3-tier tree (6 links x 1 us x 2). HPCC sizes W_init = B*T and caps W there,
+// which fills the link only if T is the full base RTT; with 9 KB packets at
+// 400 Gbps the store-and-forward serialization adds 6 x 0.18 us, and the
+// measured base RTT host 0 -> host 8 is 13.1 us (docs/VALIDATION.md). With
+// 12 us a lone flow is window-limited to 600 KB / 13.1 us = 92 % of line
+// rate. Other topologies need -hpcc_T (e.g. 16.4 us on the 100 Gbps
+// fat_tree_128_* files). -hpcc_legacy restores 12 us.
+simtime_picosec HPCCSrc::_T = timeFromUs(13.1);
 double HPCCSrc::_eta = 0.95;//Target link utilization
 uint32_t HPCCSrc::_max_stages = 5;//Maximum stages for additive increases
 uint32_t HPCCSrc::_N = 10;//maximum number of flows.
 uint32_t HPCCSrc::_Wai = 0;//Additive increase amount.
+bool HPCCSrc::_legacy = false;   // -hpcc_legacy: original HTSIM window update
+bool HPCCSrc::_Wai_set = false;  // -hpcc_wai given
+bool HPCCSrc::_trace = false;    // -hpcc_trace
 
 HPCCSrc::HPCCSrc(HPCCLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, linkspeed_bps rate)
     : BaseQueue(rate,eventlist,NULL), _logger(logger), _flow(pktlogger)
@@ -62,10 +73,12 @@ HPCCSrc::HPCCSrc(HPCCLogger* logger, TrafficLogger* pktlogger, EventList &eventl
     _node_num = _global_node_count++;
     _nodename = "HPCCsrc " + to_string(_node_num);
 
-    srand(time(NULL));
+    // Was srand(time(NULL)): reseeding the global RNG from the wall clock
+    // made every run nondeterministic and ignored -seed. roce.cpp already
+    // has this line commented out upstream. The ECMP entropy now comes from
+    // the -seed stream like every other random choice.
+    //srand(time(NULL));
     _pathid = random()%256;
-
-    _Wai = _mss;
 
     //cout << _nodename << " path id is " << _pathid << endl;
 
@@ -83,8 +96,33 @@ HPCCSrc::HPCCSrc(HPCCLogger* logger, TrafficLogger* pktlogger, EventList &eventl
     _link_count = 0;
     _last_update_seq = 0;
 
+    // Was uninitialised (read by computeWind on the first ACK).
+    _incStage = 0;
+    _Wc = _cwnd;
 
-    cout << "Initial CWND is " << _cwnd << " target RTT " << timeAsUs(_T) << " rate " << rate << endl;
+    // HPCC paper, Sec. 3.3: W_init = B_NIC * T; the sending rate never
+    // exceeds the NIC line rate, i.e. W <= W_init (the reference ns-3 code
+    // clamps the rate to [minRate, lineRate] before storing it as the
+    // reference). W_AI = W_init * (1 - eta) / N.
+    _W_init = (double)_cwnd;
+    _W_max = _W_init;
+    _W_min = _mss;
+    _Wc_d = _W_init;
+    _have_ref = false;
+    _last_goback_ts = 0;
+    if (_legacy)
+        _Wai = _mss;   // original HTSIM value
+    else if (!_Wai_set)
+        _Wai = (uint32_t)(_W_init * (1.0 - _eta) / _N);
+
+    _stat_maxW = _stat_minW = _W_init;
+    _stat_wc_updates = 0;
+    _stat_stale_nacks = 0;
+    _tr_tau = _tr_uq = _tr_utx = _tr_hop = 0;
+
+    cout << "Initial CWND is " << _cwnd << " target RTT " << timeAsUs(_T) << " rate " << rate
+         << (_legacy ? " legacy" : " paper") << " eta " << _eta << " maxStage " << _max_stages
+         << " W_AI " << _Wai << endl;
     _flightsize = 0;
     _U = _eta;
 }
@@ -139,8 +177,11 @@ void HPCCSrc::connect(Route* routeout, Route* routeback, HPCCSink& sink, simtime
     _sink->connect(*this, routeback);
 
     if (starttime != TRIGGER_START) {
-        //eventlist().sourceIsPending(*this,starttime);
-        startflow();
+        // Was startflow() here, which ignored starttime and started every
+        // flow at t=0 whatever the matrix said. starttime is already in
+        // picoseconds (connection_matrix.cpp), as in ndp.cpp; doNextEvent()
+        // calls startflow() on this first wakeup.
+        eventlist().sourceIsPending(*this,starttime);
     }
     else cout << "TRIGGER START " << _nodename << endl; 
 }
@@ -150,12 +191,28 @@ void HPCCSrc::connect(Route* routeout, Route* routeback, HPCCSink& sink, simtime
    it.  However, sometimes the NACK has the PULL bit set, and then we
    resend immediately */
 void HPCCSrc::processNack(const HPCCNack& nack){
+    // Reordering (adaptive routing) makes the sink NACK every packet that
+    // arrives above a hole, so NACKs arrive in bursts and can be overtaken by
+    // ACKs. Ignore a NACK that (a) is behind the cumulative ACK we already
+    // have, or (b) was triggered by a packet sent before our last go-back-N
+    // (nack.ts() is the triggering data packet's send time, hpcc.cpp
+    // send_nack): that go-back already resends everything it could ask for.
+    // The original code went back on every NACK, moving _last_acked
+    // backwards and zeroing _flightsize under ACKs still in flight, which
+    // tripped the assert in processAck.
+    if (nack.ackno() < _last_acked || nack.ts() < _last_goback_ts) {
+        _stat_stale_nacks++;
+        return;
+    }
+    _last_goback_ts = eventlist().now();
     _last_acked = nack.ackno();
     _rtx_packets_sent += _highest_sent - _last_acked;
 
     cout << "HPCC " << _name << " go back n from " <<  _highest_sent << " to " << _last_acked << " at " << timeAsUs(eventlist().now()) << " us" << endl;
 
-    if (_flow_size && _highest_sent>_flow_size && _last_acked < _flow_size){
+    // Was _highest_sent > _flow_size; doNextEvent stops at >=, so a flow
+    // whose size is a multiple of the MSS never restarted (same as roce.cpp).
+    if (_flow_size && _highest_sent>=_flow_size && _last_acked < _flow_size){
         //restart the pacing of packets, this has stopped once we've passed the flow size but now a packet in the last window was lost.
         eventlist().sourceIsPendingRel(*this,0);
     }
@@ -163,7 +220,11 @@ void HPCCSrc::processNack(const HPCCNack& nack){
     _highest_sent = _last_acked;
     _nacks_received ++;
 
-    _cwnd = _mss;
+    if (_legacy) {
+        _cwnd = _mss;
+    }
+    // Paper / reference ns-3: go-back-N only; the window is set by INT,
+    // not cut to one packet on a NACK (HTSIM NACKs carry no INT).
     _flightsize = 0;
 
     //this packet be sent when it is time to send a new packet!
@@ -174,9 +235,14 @@ void HPCCSrc::processAck(const HPCCAck& ack) {
     HPCCAck::seq_t ackno = ack.ackno();
 
     if (ackno > _last_acked) { // a brand new ack    
-        assert(ackno - _last_acked <= _flightsize);
-        _flightsize -= (ackno - _last_acked);
+        // Was assert(ackno - _last_acked <= _flightsize). After a go-back-N
+        // (_flightsize = 0), ACKs for packets of the abandoned window that
+        // were only reordered, not lost, still arrive and fired the assert.
+        HPCCAck::seq_t newly = ackno - _last_acked;
+        _flightsize -= min(newly, _flightsize);
         _last_acked = ackno;
+        if (_highest_sent < ackno)
+            _highest_sent = ackno;   // already delivered, do not resend
     }
 
     //HPCC magic here.
@@ -189,18 +255,49 @@ void HPCCSrc::processAck(const HPCCAck& ack) {
       26:        W = ComputeWind(MeasureInflight(ack), False);
       27:    R = W/T; L = ack.L; 
     */   
-    if (ackno > _last_update_seq){
-        _cwnd = computeWind(measureInFlight(ack), true);
-        cout << "CWND1 " << _cwnd << " ACKNO " << ackno << " at " << timeAsUs(eventlist().now()) << " src " << _nodename << endl;
+    if (_legacy) {
+        // Original HTSIM update (-hpcc_legacy). _cwnd is both W and Wc and is
+        // overwritten on every ACK, so the once-per-RTT update compounds per
+        // ACK; the INT reference is never refreshed (measureInFlight).
+        if (ackno > _last_update_seq){
+            _cwnd = computeWind(measureInFlight(ack), true);
+            if (_trace) cout << "HPCCW " << timeAsUs(eventlist().now()) << " " << _nodename << " W " << _cwnd << " U " << _U << " full" << endl;
+            _last_update_seq = _highest_sent;
+        }
+        else {
+            _cwnd = computeWind(measureInFlight(ack), false);
+        }
+        _stat_maxW = max(_stat_maxW, (double)_cwnd);
+        _stat_minW = min(_stat_minW, (double)_cwnd);
+        _pacing_rate = _cwnd * 8 * pow(10,12) / _T;
+        update_spacing();
+    } else if (!_have_ref) {
+        // First ACK: store its INT as the reference L; no rate change (the
+        // reference ns-3 code does the same in its first RTT).
+        storeReference(ack);
+        _have_ref = true;
         _last_update_seq = _highest_sent;
+    } else {
+        // Algorithm 1, NewAck. W is recomputed on every ACK from the fixed
+        // reference Wc (fast reaction); Wc, incStage and lastUpdateSeq only
+        // move once per RTT, when the ACK covers the data sent at the last
+        // update (ack.seq > lastUpdateSeq).
+        double U = measureInflightPaper(ack);   // also does L = ack.L
+        bool updateWc = ackno > _last_update_seq;
+        double W = computeWindPaper(U, updateWc);
+        if (updateWc) {
+            _last_update_seq = _highest_sent;   // snd_nxt
+            _stat_wc_updates++;
+            if (_trace) {
+                double n = _tr_tau > 0 ? _tr_tau : 1;
+                cout << "HPCCW " << timeAsUs(eventlist().now()) << " " << _nodename << " W " << W << " U " << U
+                     << " stage " << _incStage << " uq " << _tr_uq / n << " utx " << _tr_utx / n
+                     << " hop " << _tr_hop / n << endl;
+                _tr_tau = _tr_uq = _tr_utx = _tr_hop = 0;
+            }
+        }
+        setWindow(W);                           // R = W / T
     }
-    else {
-        _cwnd = computeWind(measureInFlight(ack), false);
-        cout << "CWND2 " << _cwnd << " ACKNO " << ackno << " at " << timeAsUs(eventlist().now()) << " src " << _nodename << endl;
-    }
-
-    _pacing_rate = _cwnd * 8 * pow(10,12) / _T;
-    update_spacing();
 
     //cout << "INT Entries " << ack._int_hop << " qs " << ack._int_info[0]._queuesize << " TS " << timeAsUs(ack._int_info[0]._ts) << " TX " << ack._int_info[0]._txbytes << endl; 
 
@@ -208,7 +305,8 @@ void HPCCSrc::processAck(const HPCCAck& ack) {
     if (_logger) _logger->logHPCC(*this, HPCCLogger::HPCC_RCV);
 
     if (ackno >= _flow_size){
-        cout << "Flow " << _name << " flowId " << _flow.flow_id() << " finished at " << timeAsUs(eventlist().now()) << " total bytes " << ackno << endl;
+        cout << "Flow " << _name << " flowId " << flow_id() << " finished at " << timeAsUs(eventlist().now()) << " total bytes " << ackno << endl;
+        print_hpcc_stats();
         _done = true;
         if (_end_trigger) {
             _end_trigger->activate();
@@ -308,12 +406,11 @@ void HPCCSrc::send_packet() {
 }
 
 void HPCCSrc::doNextEvent() {
-    /*if (!_flow_started){
-      startflow();
-      return;
-      }*/
-
-    assert(_flow_started);
+    if (!_flow_started){
+        // first wakeup, scheduled by connect() at the matrix start time
+        startflow();
+        return;
+    }
 
     if (_state_send==PAUSED)
         return;
@@ -415,6 +512,102 @@ HPCCPacket::seq_t HPCCSrc::computeWind(double U, bool updateWc){
     } 
     return W; 
 };
+
+void HPCCSrc::print_hpcc_stats() {
+    cout << "HPCC_STATS " << _name << " maxW " << _stat_maxW << " minW " << _stat_minW
+         << " Wc_updates " << _stat_wc_updates << " nacks " << _nacks_received
+         << " stale_nacks " << _stat_stale_nacks << " rtx_pkts_est " << _rtx_packets_sent / _mss << endl;
+}
+
+void HPCCSrc::storeReference(const HPCCAck& ack) {
+    _link_count = ack._int_hop;
+    for (uint32_t i = 0; i < _link_count; i++)
+        _link_info[i] = ack._int_info[i];
+}
+
+// Algorithm 1, MeasureInflight, with three differences from the legacy
+// measureInFlight() above: L = ack.L after every ACK (line 27; legacy kept
+// the first ACK's INT forever), tau/T in floating point (legacy divided two
+// simtime_picosec integers, so tau/T was 0 unless tau >= T), and a hop whose
+// switch changed (adaptive routing) or whose timestamp did not advance is
+// skipped instead of producing a bogus or negative txRate.
+double HPCCSrc::measureInflightPaper(const HPCCAck& ack) {
+    if (ack._int_hop != _link_count) {   // path length changed: new reference
+        storeReference(ack);
+        return _U;
+    }
+    const double T = (double)_T;          // ps
+    double u = 0, tau = T, uq = 0, utx = 0;
+    uint32_t hop = 0;
+    bool any = false;
+    for (uint32_t i = 0; i < _link_count; i++) {
+        const IntEntry& now = ack._int_info[i];
+        const IntEntry& ref = _link_info[i];
+        if (now._switchID != ref._switchID || now._ts <= ref._ts || now._txbytes < ref._txbytes)
+            continue;
+        double dt = (double)(now._ts - ref._ts);                       // ps
+        double B = (double)now._linkrate;                              // bit/s
+        double txRate = (double)(now._txbytes - ref._txbytes) * 8.0 * 1e12 / dt;  // bit/s
+        // INT qlen is stamped in LosslessOutputQueue::completeService before
+        // the departing packet is subtracted (queue_lossless_output.cpp:130
+        // vs :144), so it always includes that packet itself. HPCC's qlen
+        // (and the reference ns-3 switch, which stamps after dequeue) is the
+        // queue left behind. Remove our own packet (all HPCC data packets are
+        // _mss + ACKSIZE on the wire); otherwise an idle link reports a
+        // phantom 1 MTU queue, U is biased up by 1 MTU/(B*T) (1.5 % at
+        // 400 Gbps, 9 KB, 12 us) and the link settles at ~93 % instead of eta.
+        double own = (double)(_mss + HPCCPacket::ACKSIZE);
+        double qlen = max(0.0, (double)min(now._queuesize, ref._queuesize) - own);  // bytes
+        double uprime = qlen * 8.0 / (B * T * 1e-12) + txRate / B;
+        if (!any || uprime > u) {
+            u = uprime;
+            tau = dt;
+            any = true;
+            uq = qlen * 8.0 / (B * T * 1e-12);
+            utx = txRate / B;
+            hop = i;
+        }
+    }
+    storeReference(ack);                  // L = ack.L
+    if (any) {
+        tau = min(tau, T);
+        _U = (1.0 - tau / T) * _U + (tau / T) * u;
+        if (_trace) {   // time-weighted split of u since the last Wc update
+            _tr_tau += tau; _tr_uq += tau * uq; _tr_utx += tau * utx; _tr_hop += tau * hop;
+        }
+    }
+    return _U;
+}
+
+// Algorithm 1, ComputeWind. Wc and incStage change only when updateWc.
+double HPCCSrc::computeWindPaper(double U, bool updateWc) {
+    double W;
+    if (U >= _eta || _incStage >= _max_stages) {
+        W = (U > 1e-9) ? _Wc_d / (U / _eta) + _Wai : _W_max;
+        W = min(max(W, _W_min), _W_max);
+        if (updateWc) {
+            _incStage = 0;
+            _Wc_d = W;
+        }
+    } else {
+        W = _Wc_d + _Wai;
+        W = min(max(W, _W_min), _W_max);
+        if (updateWc) {
+            _incStage++;
+            _Wc_d = W;
+        }
+    }
+    return W;
+}
+
+void HPCCSrc::setWindow(double W) {
+    _cwnd = (HPCCPacket::seq_t)W;
+    _Wc = (HPCCPacket::seq_t)_Wc_d;
+    _stat_maxW = max(_stat_maxW, W);
+    _stat_minW = min(_stat_minW, W);
+    _pacing_rate = W * 8 * pow(10,12) / _T;   // R = W / T
+    update_spacing();
+}
 
 ////////////////////////////////////////////////////////////////
 //  HPCC SINK

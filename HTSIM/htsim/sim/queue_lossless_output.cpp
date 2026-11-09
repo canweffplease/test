@@ -2,6 +2,7 @@
 #include <math.h>
 #include <iostream>
 #include <sstream>
+#include <cstdlib>
 #include "switch.h"
 #include "hpccpacket.h"
 #include "queue_lossless_output.h"
@@ -9,6 +10,54 @@
 
 int LosslessOutputQueue::_ecn_enabled = false;
 int LosslessOutputQueue::_K = 0;
+
+bool LosslessOutputQueue::_ecn_red = false;
+mem_b LosslessOutputQueue::_ecn_kmin = 0;
+mem_b LosslessOutputQueue::_ecn_kmax = 0;
+double LosslessOutputQueue::_ecn_pmax = 0;
+uint64_t LosslessOutputQueue::_ecn_seen = 0;
+uint64_t LosslessOutputQueue::_ecn_drawn = 0;
+uint64_t LosslessOutputQueue::_ecn_marked_prob = 0;
+uint64_t LosslessOutputQueue::_ecn_marked_forced = 0;
+std::mt19937_64 LosslessOutputQueue::_ecn_rng;
+
+static void print_ecn_red_stats() {
+    cout << "ECN_RED stats: data pkts dequeued " << LosslessOutputQueue::_ecn_seen
+         << " drawn(Kmin<q<=Kmax) " << LosslessOutputQueue::_ecn_drawn
+         << " marked_prob " << LosslessOutputQueue::_ecn_marked_prob
+         << " marked_forced(q>Kmax) " << LosslessOutputQueue::_ecn_marked_forced << endl;
+}
+
+void LosslessOutputQueue::enable_red(mem_b kmin, mem_b kmax, double pmax, unsigned seed) {
+    assert(kmin >= 0 && kmax >= kmin && pmax >= 0 && pmax <= 1);
+    _ecn_red = true;
+    _ecn_kmin = kmin;
+    _ecn_kmax = kmax;
+    _ecn_pmax = pmax;
+    _ecn_rng.seed(seed);
+    atexit(print_ecn_red_stats);
+}
+
+// Debug: ECN_TRACE=1 (RED mode only) prints "ECN_MARK <us> <queue> <flow name> prob|forced <q bytes>" per mark.
+static bool ecn_trace = getenv("ECN_TRACE") != NULL;
+
+int LosslessOutputQueue::red_mark(mem_b q) {
+    _ecn_seen++;
+    if (q > _ecn_kmax) {           // above Kmax: always mark (same strict '>' as the step rule)
+        _ecn_marked_forced++;
+        return 2;
+    }
+    if (q <= _ecn_kmin)            // never true when Kmin == Kmax, so no division by zero below
+        return 0;
+    double p = _ecn_pmax * (double)(q - _ecn_kmin) / (double)(_ecn_kmax - _ecn_kmin);
+    _ecn_drawn++;
+    double u = (double)(_ecn_rng() >> 11) * (1.0 / 9007199254740992.0);   // uniform [0,1), 53 bits
+    if (u < p) {
+        _ecn_marked_prob++;
+        return 1;
+    }
+    return 0;
+}
 
 LosslessOutputQueue::LosslessOutputQueue(linkspeed_bps bitrate, mem_b maxsize, 
                                          EventList& eventlist, QueueLogger* logger)
@@ -119,8 +168,19 @@ void LosslessOutputQueue::completeService(){
     _vq.pop_back();
 
     //mark on deque
-    if (_ecn_enabled && _queuesize > _K)
-        pkt->set_flags(pkt->flags() | ECN_CE); 
+    if (_ecn_enabled) {
+        if (_ecn_red) {
+            // probabilistic marking (OUR_CHANGES.md (section "DCQCN switch marking: probabilistic (RED) ECN")); data packets only
+            int m = pkt->type() == ROCE ? red_mark(_queuesize) : 0;
+            if (m) {
+                pkt->set_flags(pkt->flags() | ECN_CE);
+                if (ecn_trace)
+                    cout << "ECN_MARK " << timeAsUs(eventlist().now()) << " " << _name << " "
+                         << pkt->flow().str() << " " << (m == 1 ? "prob" : "forced") << " " << _queuesize << endl;
+            }
+        } else if (_queuesize > _K)
+            pkt->set_flags(pkt->flags() | ECN_CE); 
+    }
 
     if (pkt->type()==HPCC){
         //HPPC INT information adding to packet

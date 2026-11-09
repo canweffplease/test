@@ -56,7 +56,9 @@ cd "$HERE"
 
 echo
 echo "==> smoke test: DCQCN, one Llama-3-70B 4K cache at TP=8"
-echo "    expect 8 flows, 0 violations, about 3.6x floor"
+echo "    expect 8 flows, 0 violations, about 4.5x floor (15,171 us at the default seed)"
+echo "    paper-faithful DCQCN with probabilistic ECN marking; the 3.6x in checkpoint 1"
+echo "    was the legacy transport, reproducible with EXTRA_ARGS=-dcqcn_legacy ECN_STEP=1"
 ./scripts/run.sh dcqcn default smoketest workloads/kv_llama70b_4k_tp8.cm
 echo
 echo "SETUP OK. Read TASKS.md, then run  claude  in this folder."

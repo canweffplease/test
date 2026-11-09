@@ -1,0 +1,175 @@
+{
+ "meta": {
+  "command": "scripts/gen_workload.py --topo default --model llama3-70b --prompt fixed:4096 --tp 8 --shards 1 --pattern incast --incast 4 --arrival fixed --requests 4 --interval-us 0 --out workloads/e6_incast4_ft16.cm",
+  "topology": "default(K=4): 16 hosts, 3 tiers, 2 hosts/ToR, 4 hosts/pod (8 ToRs, 4 pods), host link 400 Gbps, ToR uplinks 800 Gbps/ToR, pod->core 1600 Gbps/pod",
+  "nodes": 16,
+  "model": "llama3-70b",
+  "bytes_per_token": 327680,
+  "tp": 8,
+  "shards_simulated": 1,
+  "pattern": "incast",
+  "placement": "split",
+  "prefill_instances": [
+   [
+    0
+   ],
+   [
+    1
+   ],
+   [
+    2
+   ],
+   [
+    3
+   ]
+  ],
+  "decode_instances": [
+   [
+    8
+   ]
+  ],
+  "arrival": "fixed",
+  "prompt": "fixed:4096",
+  "seed": 1,
+  "window_ps": 50000000000,
+  "start_offset_ps": 0,
+  "bottleneck_gbps": 400.0,
+  "bottleneck_computed_gbps": 400.0,
+  "bottleneck_binding": [
+   "host_down"
+  ],
+  "rate_rps": null,
+  "target_load": null,
+  "offered_load_realized": null,
+  "mean_request_bytes": 167772160,
+  "requests": 4,
+  "flows": 4,
+  "total_bytes": 671088640,
+  "deadline_slack": 2.0,
+  "deadline_definition": "start_ps + slack * floor_ps; floor_ps = bytes*8 / min line rate on the flow's path (uncontended floor)",
+  "prio": "none",
+  "note": "",
+  "also_topo": [],
+  "log_matching": "HTSIM logs name flows <Proto>_<src>_<dst>; match on (src,dst) and pair_seq (order of start among flows on that pair)"
+ },
+ "requests": [
+  {
+   "request_id": 0,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "prefill_instance": 0,
+   "decode_instance": 0,
+   "prefill_hosts": [
+    0
+   ],
+   "decode_hosts": [
+    8
+   ],
+   "bytes": 167772160,
+   "deadline_ps": 6710886400
+  },
+  {
+   "request_id": 1,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "prefill_instance": 1,
+   "decode_instance": 0,
+   "prefill_hosts": [
+    1
+   ],
+   "decode_hosts": [
+    8
+   ],
+   "bytes": 167772160,
+   "deadline_ps": 6710886400
+  },
+  {
+   "request_id": 2,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "prefill_instance": 2,
+   "decode_instance": 0,
+   "prefill_hosts": [
+    2
+   ],
+   "decode_hosts": [
+    8
+   ],
+   "bytes": 167772160,
+   "deadline_ps": 6710886400
+  },
+  {
+   "request_id": 3,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "prefill_instance": 3,
+   "decode_instance": 0,
+   "prefill_hosts": [
+    3
+   ],
+   "decode_hosts": [
+    8
+   ],
+   "bytes": 167772160,
+   "deadline_ps": 6710886400
+  }
+ ],
+ "flows": [
+  {
+   "request_id": 0,
+   "shard": 0,
+   "src": 0,
+   "dst": 8,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "cross_pod",
+   "floor_ps": 3355443200,
+   "deadline_ps": 6710886400,
+   "flow_id": 1,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 1,
+   "shard": 0,
+   "src": 1,
+   "dst": 8,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "cross_pod",
+   "floor_ps": 3355443200,
+   "deadline_ps": 6710886400,
+   "flow_id": 2,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 2,
+   "shard": 0,
+   "src": 2,
+   "dst": 8,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "cross_pod",
+   "floor_ps": 3355443200,
+   "deadline_ps": 6710886400,
+   "flow_id": 3,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 3,
+   "shard": 0,
+   "src": 3,
+   "dst": 8,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "cross_pod",
+   "floor_ps": 3355443200,
+   "deadline_ps": 6710886400,
+   "flow_id": 4,
+   "pair_seq": 0
+  }
+ ]
+}

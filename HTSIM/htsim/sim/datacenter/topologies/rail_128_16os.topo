@@ -1,0 +1,25 @@
+# Spine-starved variant of rail_128_1os.topo: same 8 rail (leaf) switches of
+# 16 hosts, but ONE spine and one 100 Gbps uplink per rail switch (16:1).
+# The .topo format cannot remove the spine entirely (radix_up must be > 0
+# below the top tier, fat_tree_topology.cpp:276), so this is the closest
+# expressible stand-in for Wang et al.'s rail-only network: cross-rail
+# capacity is 1/16 of rail-optimized. Rail-local traffic (rail labelling,
+# host = 16*gpu_index + node) never touches the spine and should be
+# unaffected. See docs/TOPOLOGY_RAIL.md.
+Nodes 128
+Tiers 2
+Podsize 128
+
+Tier 0
+Oversubscribed 16
+Downlink_speed_Gbps 100
+Radix_Down 16
+Radix_Up 1
+Downlink_Latency_ns 1000
+Switch_Latency_ns 0
+
+Tier 1
+Downlink_speed_Gbps 100
+Radix_Down 8
+Downlink_Latency_ns 1000
+Switch_Latency_ns 0

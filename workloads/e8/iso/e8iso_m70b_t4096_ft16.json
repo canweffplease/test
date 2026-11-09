@@ -1,0 +1,210 @@
+{
+ "meta": {
+  "command": "scripts/gen_workload.py --topo default --model llama3-70b --prompt fixed:4096 --tp 8 --pattern tp --arrival fixed --requests 1 --interval-us 0 --seed 1 --out workloads/e8/iso/e8iso_m70b_t4096_ft16.cm",
+  "topology": "default(K=4): 16 hosts, 3 tiers, 2 hosts/ToR, 4 hosts/pod (8 ToRs, 4 pods), host link 400 Gbps, ToR uplinks 800 Gbps/ToR, pod->core 1600 Gbps/pod",
+  "nodes": 16,
+  "model": "llama3-70b",
+  "bytes_per_token": 327680,
+  "tp": 8,
+  "shards_simulated": 8,
+  "pattern": "tp",
+  "placement": "split",
+  "prefill_instances": [
+   [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ]
+  ],
+  "decode_instances": [
+   [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ]
+  ],
+  "arrival": "fixed",
+  "prompt": "fixed:4096",
+  "seed": 1,
+  "window_ps": 50000000000,
+  "start_offset_ps": 0,
+  "bottleneck_gbps": 3200.0,
+  "bottleneck_computed_gbps": 3200.0,
+  "bottleneck_binding": [
+   "host_up",
+   "host_down",
+   "tor_up",
+   "tor_down",
+   "pod_up",
+   "pod_down"
+  ],
+  "rate_rps": null,
+  "target_load": null,
+  "offered_load_realized": null,
+  "mean_request_bytes": 1342177280,
+  "requests": 1,
+  "flows": 8,
+  "total_bytes": 1342177280,
+  "deadline_slack": 2.0,
+  "deadline_definition": "start_ps + slack * floor_ps; floor_ps = bytes*8 / min line rate on the flow's path (uncontended floor)",
+  "prio": "none",
+  "note": "",
+  "also_topo": [],
+  "log_matching": "HTSIM logs name flows <Proto>_<src>_<dst>; match on (src,dst) and pair_seq (order of start among flows on that pair)"
+ },
+ "requests": [
+  {
+   "request_id": 0,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "prefill_instance": 0,
+   "decode_instance": 0,
+   "prefill_hosts": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+   ],
+   "decode_hosts": [
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ],
+   "bytes": 1342177280,
+   "deadline_ps": 6710886400
+  }
+ ],
+ "flows": [
+  {
+   "request_id": 0,
+   "shard": 0,
+   "src": 0,
+   "dst": 8,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "cross_pod",
+   "floor_ps": 3355443200,
+   "deadline_ps": 6710886400,
+   "flow_id": 1,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 1,
+   "src": 1,
+   "dst": 9,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "cross_pod",
+   "floor_ps": 3355443200,
+   "deadline_ps": 6710886400,
+   "flow_id": 2,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 2,
+   "src": 2,
+   "dst": 10,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "cross_pod",
+   "floor_ps": 3355443200,
+   "deadline_ps": 6710886400,
+   "flow_id": 3,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 3,
+   "src": 3,
+   "dst": 11,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "cross_pod",
+   "floor_ps": 3355443200,
+   "deadline_ps": 6710886400,
+   "flow_id": 4,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 4,
+   "src": 4,
+   "dst": 12,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "cross_pod",
+   "floor_ps": 3355443200,
+   "deadline_ps": 6710886400,
+   "flow_id": 5,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 5,
+   "src": 5,
+   "dst": 13,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "cross_pod",
+   "floor_ps": 3355443200,
+   "deadline_ps": 6710886400,
+   "flow_id": 6,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 6,
+   "src": 6,
+   "dst": 14,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "cross_pod",
+   "floor_ps": 3355443200,
+   "deadline_ps": 6710886400,
+   "flow_id": 7,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 7,
+   "src": 7,
+   "dst": 15,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "cross_pod",
+   "floor_ps": 3355443200,
+   "deadline_ps": 6710886400,
+   "flow_id": 8,
+   "pair_seq": 0
+  }
+ ]
+}

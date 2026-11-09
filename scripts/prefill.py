@@ -1,5 +1,25 @@
 #!/usr/bin/env python3
-"""M3. Prefill cost and the prefill pool queue, giving each flow its start time.
+"""Prefill cost and the prefill pool queue, giving each flow its start time.
+
+Where this fits
+---------------
+`gen_workload.py` starts a flow when its request arrives. In disaggregated
+serving the KV cache does not exist until prefill finishes, so the transfer
+cannot begin then. This module supplies the missing offset, which is the
+"Vidur-calibrated prefill compute, so deadlines and TTFT are end-to-end and
+not network-only" item on the remaining work list.
+
+It is standalone today. Wiring it in means an `--arrival trace-prefill` mode
+in `gen_workload.py` that, instead of using trace timestamps directly, runs
+each request through PrefillPool and uses the finish time. That is a small
+change and it should not become the default, because every existing result
+was produced with arrival-time starts and has to stay reproducible.
+
+Two things it buys beyond a different start time. Arrival time and prompt
+length stay paired per request, where `--prompt trace` samples the two
+independently, so a long prompt does not arrive at a random moment. And a
+burst of arrivals comes out smeared by prefill rather than launching
+together, which is what a real prefill pool does to a burst.
 
 A request arrives at time t, but its KV cache does not exist until prefill
 finishes, so the transfer cannot start at t.

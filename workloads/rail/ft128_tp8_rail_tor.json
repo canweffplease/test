@@ -1,0 +1,226 @@
+{
+ "meta": {
+  "command": "scripts/gen_workload.py --topo ft128_1os --model llama3-70b --tp 8 --pattern same_tor --placement rail --rail-domain tor --arrival fixed --requests 1 --prompt fixed:4096 --out workloads/rail/ft128_tp8_rail_tor.cm",
+  "topology": "ft128_1os: 128 hosts, 3 tiers, 4 hosts/ToR, 16 hosts/pod (32 ToRs, 8 pods), host link 100 Gbps, ToR uplinks 400 Gbps/ToR, pod->core 1600 Gbps/pod",
+  "nodes": 128,
+  "model": "llama3-70b",
+  "bytes_per_token": 327680,
+  "tp": 8,
+  "shards_simulated": 8,
+  "pattern": "same_tor",
+  "placement": "rail",
+  "prefill_instances": [
+   [
+    0,
+    4,
+    8,
+    12,
+    16,
+    20,
+    24,
+    28
+   ],
+   [
+    1,
+    5,
+    9,
+    13,
+    17,
+    21,
+    25,
+    29
+   ]
+  ],
+  "decode_instances": [
+   [
+    2,
+    6,
+    10,
+    14,
+    18,
+    22,
+    26,
+    30
+   ],
+   [
+    3,
+    7,
+    11,
+    15,
+    19,
+    23,
+    27,
+    31
+   ]
+  ],
+  "arrival": "fixed",
+  "prompt": "fixed:4096",
+  "seed": 1,
+  "window_ps": 50000000000,
+  "start_offset_ps": 0,
+  "bottleneck_gbps": 1600.0,
+  "bottleneck_computed_gbps": 1600.0,
+  "bottleneck_binding": [
+   "host_up",
+   "host_down"
+  ],
+  "rate_rps": null,
+  "target_load": null,
+  "offered_load_realized": null,
+  "mean_request_bytes": 1342177280,
+  "requests": 1,
+  "flows": 8,
+  "total_bytes": 1342177280,
+  "deadline_slack": 2.0,
+  "deadline_definition": "start_ps + slack * floor_ps; floor_ps = bytes*8 / min line rate on the flow's path (uncontended floor)",
+  "prio": "none",
+  "note": "",
+  "also_topo": [],
+  "log_matching": "HTSIM logs name flows <Proto>_<src>_<dst>; match on (src,dst) and pair_seq (order of start among flows on that pair)"
+ },
+ "requests": [
+  {
+   "request_id": 0,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "prefill_instance": 0,
+   "decode_instance": 0,
+   "prefill_hosts": [
+    0,
+    4,
+    8,
+    12,
+    16,
+    20,
+    24,
+    28
+   ],
+   "decode_hosts": [
+    2,
+    6,
+    10,
+    14,
+    18,
+    22,
+    26,
+    30
+   ],
+   "bytes": 1342177280,
+   "deadline_ps": 26843545600
+  }
+ ],
+ "flows": [
+  {
+   "request_id": 0,
+   "shard": 0,
+   "src": 0,
+   "dst": 2,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "same_tor",
+   "floor_ps": 13421772800,
+   "deadline_ps": 26843545600,
+   "flow_id": 1,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 1,
+   "src": 4,
+   "dst": 6,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "same_tor",
+   "floor_ps": 13421772800,
+   "deadline_ps": 26843545600,
+   "flow_id": 2,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 2,
+   "src": 8,
+   "dst": 10,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "same_tor",
+   "floor_ps": 13421772800,
+   "deadline_ps": 26843545600,
+   "flow_id": 3,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 3,
+   "src": 12,
+   "dst": 14,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "same_tor",
+   "floor_ps": 13421772800,
+   "deadline_ps": 26843545600,
+   "flow_id": 4,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 4,
+   "src": 16,
+   "dst": 18,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "same_tor",
+   "floor_ps": 13421772800,
+   "deadline_ps": 26843545600,
+   "flow_id": 5,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 5,
+   "src": 20,
+   "dst": 22,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "same_tor",
+   "floor_ps": 13421772800,
+   "deadline_ps": 26843545600,
+   "flow_id": 6,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 6,
+   "src": 24,
+   "dst": 26,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "same_tor",
+   "floor_ps": 13421772800,
+   "deadline_ps": 26843545600,
+   "flow_id": 7,
+   "pair_seq": 0
+  },
+  {
+   "request_id": 0,
+   "shard": 7,
+   "src": 28,
+   "dst": 30,
+   "bytes": 167772160,
+   "start_ps": 0,
+   "prompt_tokens": 4096,
+   "tier_crossed": "same_tor",
+   "floor_ps": 13421772800,
+   "deadline_ps": 26843545600,
+   "flow_id": 8,
+   "pair_seq": 0
+  }
+ ]
+}

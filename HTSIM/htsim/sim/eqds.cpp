@@ -362,6 +362,7 @@ EqdsSrc::EqdsSrc(TrafficLogger* trafficLogger, EventList& eventList, EqdsNIC& ni
     _credit_spec = _maxwnd;
     _in_flight = 0;
     _highest_sent = 0;
+    _highest_cum_ack = 0;
     _send_blocked_on_nic = false;
     _no_of_paths = _path_entropy_size;
     _path_random = rand() % 0xffff;  // random upper bits of EV
@@ -375,6 +376,7 @@ EqdsSrc::EqdsSrc(TrafficLogger* trafficLogger, EventList& eventList, EqdsNIC& ni
     _rtx_packets_sent = 0;
     _rts_packets_sent = 0;
     _bounces_received = 0;
+    _stale_nacks_received = 0;
 
     // reset path penalties
     _ev_skip_bitmap.resize(_no_of_paths);
@@ -427,10 +429,7 @@ void EqdsSrc::connectPort(uint32_t port_num,
         _flow._name = _name;
 
         if (start_time != TRIGGER_START) {
-            // FIX: same double unit conversion as roce.cpp, and the
-            // uint32_t cast also truncated any start past 4.29 ms.
-            // start_time is already in picoseconds.
-            eventlist().sourceIsPending(*this, start_time);
+            eventlist().sourceIsPending(*this, start_time);  // start_time is already picoseconds; timeFromUs((uint32_t)) truncated and rescaled it
         }
     }
     assert(_sink == &sink);
@@ -515,9 +514,11 @@ void EqdsSrc::receivePacket(Packet& pkt, uint32_t portnum) {
         case EQDSDATA: {
             _bounces_received++;
             // TBD - this is likely a Back-to-sender packet
+            cerr << "eqds.cpp:" << __LINE__ << " abort: EqdsSrc received a bounced EQDSDATA packet (back-to-sender not implemented)" << endl;
             abort();
         }
         case EQDSRTS: {
+            cerr << "eqds.cpp:" << __LINE__ << " abort: EqdsSrc received an EQDSRTS packet" << endl;
             abort();
         }
         case EQDSACK: {
@@ -536,6 +537,7 @@ void EqdsSrc::receivePacket(Packet& pkt, uint32_t portnum) {
             return;
         }
         default: {
+            cerr << "eqds.cpp:" << __LINE__ << " abort: EqdsSrc received a packet of unknown type" << endl;
             abort();
         }
     }
@@ -655,6 +657,8 @@ void EqdsSrc::processAck(const EqdsAckPacket& pkt) {
     
     auto cum_ack = pkt.cumulative_ack();
     mem_b newly_acked = 0;
+    if (cum_ack > _highest_cum_ack)
+        _highest_cum_ack = cum_ack;
 
     newly_acked += handleCumulativeAck(cum_ack);
 
@@ -872,13 +876,20 @@ void EqdsSrc::processNack(const EqdsNackPacket& pkt) {
         if (_debug_src)
             cout << _flow.str() << " " << "Didn't find NACKed packet in _active_packets flow " << _flow.str() << endl;
 
-        // this abort is here because this is unlikely to happen in
-        // simulation - when it does, it is usually due to a bug
-        // elsewhere.  But if you discover a case where this happens
-        // for real, remove the abort and uncomment the return below.
-        abort();
-        // this can happen when the NACK arrives later than a cumulative ACK covering the NACKed
-        // packet. return;
+        // Upstream aborted here, assuming it could only be a bug.  It
+        // does happen for real under heavy core congestion (e.g. the
+        // oversubscribed 128-node fat trees): a packet sits behind
+        // ~400us of queueing at the oversubscribed aggregation uplinks,
+        // the RTO (computed from a ~90us RTT) fires first, and
+        // rtxTimerExpired() erases the send record and queues the
+        // retransmission.  The trimmed header then reaches the sink,
+        // which NACKs a packet the source has already given up on.
+        // The same happens if a cumulative ACK overtakes the NACK.
+        // In both cases the retransmission is already handled (or not
+        // needed), so the stale NACK must be ignored.  See
+        // HTSIM/OUR_CHANGES.md.
+        _stale_nacks_received++;
+        return;
     }
 
     mem_b pkt_size = i->second.pkt_size;
@@ -1062,6 +1073,7 @@ EqdsBasePacket::pull_quanta EqdsSrc::computePullTarget() {
         if (_speculating) {
             _pull_offset = -pull_target;
         } else {
+            cerr << "eqds.cpp:" << __LINE__ << " abort: EqdsSrc pull_target below INIT_PULL while not speculating" << endl;
             abort(); // we want to know if this happens so we can come up with a clean solution
         }
         pull_target = INIT_PULL;
@@ -1118,6 +1130,12 @@ void EqdsSrc::sendIfPermitted() {
         }
 
         if (_unsent == 0) {
+            return;
+        }
+
+        if (newDataBlockedByWindow()) {
+            // the receiver's reorder window is full; wait for the
+            // cumulative ACK to advance (processAck calls us again).
             return;
         }
     }
@@ -1268,6 +1286,10 @@ mem_b EqdsSrc::sendNewPacket(const Route& route) {
              << _flow.str() << endl;
     assert(_unsent > 0);
     assert(((mem_b)_highest_sent - _rts_packets_sent) * _mss < _flow_size);
+    if (newDataBlockedByWindow()) {
+        // receiver's reorder window is full, see _highest_cum_ack
+        return 0;
+    }
     mem_b payload_size = _mss;
     if (_unsent < payload_size) {
         payload_size = _unsent;
@@ -1363,6 +1385,11 @@ void EqdsSrc::sendRTS(bool timeout) {
         // a whole window.
         return;
     }
+    if (_highest_sent >= _highest_cum_ack + eqdsMaxInFlightPkts) {
+        // an RTS consumes a PSN too; never let it overflow the
+        // receiver's reorder window.
+        return;
+    }
     if (_debug_src)
         cout << _flow.str() << " " << _nodename << " sendRTS, flow " << _flow.str() << " at "
              << timeAsUs(eventlist().now()) << " epsn " << _highest_sent << " last RTS " << timeAsUs(_last_rts)
@@ -1423,6 +1450,10 @@ void EqdsSrc::timeToSend(const Route& route) {
     // how much do we want to send?
     if (_rtx_queue.empty()) {
         // we want to send new data
+        if (newDataBlockedByWindow()) {
+            _nic.cantSend(*this);
+            return;
+        }
         mem_b payload_size = _mss;
         if (_unsent < payload_size) {
             payload_size = _unsent;
@@ -1638,6 +1669,7 @@ EqdsSink::EqdsSink(TrafficLogger* trafficLogger, EqdsPullPacer* pullPacer, EqdsN
       _epsn_rx_bitmap(0),
       _out_of_order_count(0),
       _ack_request(false) {
+    _priority = 2000000;  // same default as the connection matrix parser
     
     _nodename = "eqdsSink";  // TBD: would be nice at add nodenum to nodename
     _no_of_ports = no_of_ports;
@@ -1649,6 +1681,9 @@ EqdsSink::EqdsSink(TrafficLogger* trafficLogger, EqdsPullPacer* pullPacer, EqdsN
     _stats = {0, 0, 0, 0, 0};
     _in_pull = false;
     _in_slow_pull = false;
+    _started = false;
+    _finished = false;
+    _in_live = false;
 }
 
 EqdsSink::EqdsSink(TrafficLogger* trafficLogger,
@@ -1672,6 +1707,7 @@ EqdsSink::EqdsSink(TrafficLogger* trafficLogger,
       _epsn_rx_bitmap(0),
       _out_of_order_count(0),
       _ack_request(false) {
+    _priority = 2000000;  // same default as the connection matrix parser
     
     _pullPacer = new EqdsPullPacer(linkSpeed, rate_modifier, mtu, eventList, no_of_ports);
     _no_of_ports = no_of_ports;
@@ -1682,6 +1718,9 @@ EqdsSink::EqdsSink(TrafficLogger* trafficLogger,
     _stats = {0, 0, 0, 0, 0};
     _in_pull = false;
     _in_slow_pull = false;
+    _started = false;
+    _finished = false;
+    _in_live = false;
 }
 
 void EqdsSink::connectPort(uint32_t port_num, EqdsSrc& src, const Route& route) {
@@ -1697,7 +1736,7 @@ void EqdsSink::handlePullTarget(EqdsBasePacket::seq_t pt) {
             cout << "    pull target advanced\n";
         _highest_pull_target = pt;
 
-        if (_retx_backlog == 0 && !_in_pull) {
+        if (_retx_backlog == 0 && !_in_pull && !_finished) {
             if (_src->debug())
                 cout << "    requesting pull\n";
             _in_pull = true;
@@ -1719,6 +1758,14 @@ void EqdsSink::processData(const EqdsDataPacket& pkt) {
              << " when expected epsn is " << _expected_epsn << " ooo count " << _out_of_order_count
              << " flow " << _src->flow()->str() << endl;
 
+    if (pkt.epsn() >= _expected_epsn + eqdsMaxInFlightPkts) {
+        // _epsn_rx_bitmap would alias and falsely SACK a missing packet,
+        // leaving a hole that is never retransmitted (silent stall).
+        // EqdsSrc::newDataBlockedByWindow() should prevent this.
+        cerr << "eqds.cpp:" << __LINE__ << " abort: PSN " << pkt.epsn() << " beyond reorder window (cum ack "
+             << _expected_epsn << " + " << eqdsMaxInFlightPkts << ") flow " << _src->flow()->str() << endl;
+        abort();
+    }
     _accepted_bytes += pkt.size();
 
     handlePullTarget(pkt.pull_target());
@@ -1818,6 +1865,14 @@ void EqdsSink::processData(const EqdsDataPacket& pkt) {
 }
 
 void EqdsSink::processTrimmed(const EqdsDataPacket& pkt) {
+    if (pkt.epsn() >= _expected_epsn + eqdsMaxInFlightPkts) {
+        // _epsn_rx_bitmap would alias and falsely SACK a missing packet,
+        // leaving a hole that is never retransmitted (silent stall).
+        // EqdsSrc::newDataBlockedByWindow() should prevent this.
+        cerr << "eqds.cpp:" << __LINE__ << " abort: PSN " << pkt.epsn() << " beyond reorder window (cum ack "
+             << _expected_epsn << " + " << eqdsMaxInFlightPkts << ") flow " << _src->flow()->str() << endl;
+        abort();
+    }
     _nic.logReceivedTrim(pkt.size());
 
     _stats.trimmed++;
@@ -1869,6 +1924,14 @@ void EqdsSink::processTrimmed(const EqdsDataPacket& pkt) {
 
 void EqdsSink::processRts(const EqdsRtsPacket& pkt) {
     assert(pkt.ar());
+    if (pkt.epsn() >= _expected_epsn + eqdsMaxInFlightPkts) {
+        // _epsn_rx_bitmap would alias and falsely SACK a missing packet,
+        // leaving a hole that is never retransmitted (silent stall).
+        // EqdsSrc::newDataBlockedByWindow() should prevent this.
+        cerr << "eqds.cpp:" << __LINE__ << " abort: PSN " << pkt.epsn() << " beyond reorder window (cum ack "
+             << _expected_epsn << " + " << eqdsMaxInFlightPkts << ") flow " << _src->flow()->str() << endl;
+        abort();
+    }
     if (_src->debug())
         cout << " EqdsSink " << _nodename << " src " << _src->nodename()
              << " processRts: " << pkt.epsn() << " time " << timeAsNs(getSrc()->eventlist().now()) << endl;
@@ -1885,7 +1948,7 @@ void EqdsSink::processRts(const EqdsRtsPacket& pkt) {
              << " at " << timeAsUs(getSrc()->eventlist().now()) << endl;
 
     if (!was_retransmitting) {
-        if (!_in_pull) {
+        if (!_in_pull && !_finished) {
             // got an RTS but didn't even know that the source was backlogged. This means we lost
             // all data packets in current window. Must add to standard Pull list, to ensure that
             // after RTX phase passes,  the remaining packets are pulled normally
@@ -1976,8 +2039,43 @@ void EqdsSink::receivePacket(Packet& pkt, uint32_t port_num) {
             pkt.free();
             break;
         default:
+            cerr << "eqds.cpp:" << __LINE__ << " abort: EqdsSink received a packet of unknown type" << endl;
             abort();
     }
+    updateFlowState();
+}
+
+// Tell the pull pacer when this flow starts (first packet) and when it is
+// complete (every payload byte received).  A finished sink is removed from
+// all of the pacer's lists, so it is never credited again; upstream left it
+// in _idle_senders, often many times over (OUR_CHANGES.md (EQDS pull pacer section)).
+void EqdsSink::updateFlowState() {
+    if (!_started) {
+        _started = true;
+        _pullPacer->sinkStarted(this);
+    }
+    if (!_finished && _received_bytes >= _src->flowsize()) {
+        _finished = true;
+        _retx_backlog = 0;  // nothing left to retransmit
+        _pullPacer->sinkFinished(this);
+    }
+}
+
+// Pull quanta not yet granted to this flow: its wire bytes (payload plus
+// one header per packet, as EqdsSrc::startFlow computes _backlog), minus
+// the speculative first window the source sends without credit, minus
+// every pull issued so far.  Conservative: retransmission pulls and unspent
+// speculative credit make it an underestimate, in which case the last few
+// packets are pulled by the normal pull-target mechanism.
+EqdsBasePacket::pull_quanta EqdsSink::uncredited() const {
+    if (_finished || !_started)
+        return 0;
+    mem_b size = _src->flowsize();
+    mem_b wire = ((size + EqdsSrc::_mss - 1) / EqdsSrc::_mss) * EqdsSrc::_hdr_size + size;
+    mem_b remaining = wire - _src->maxWnd() - EqdsBasePacket::unquantize(_latest_pull - INIT_PULL);
+    if (remaining <= 0)
+        return 0;
+    return EqdsBasePacket::quantize_ceil(remaining);
 }
 
 uint16_t EqdsSink::nextEntropy() {
@@ -2123,7 +2221,22 @@ EqdsPullPacer::EqdsPullPacer(linkspeed_bps linkSpeed,
 }
 
 void EqdsPullPacer::doNextEvent() {
-    if (_rtx_senders.empty() && _active_senders.empty() && _idle_senders.empty()) {
+    // Strict priority (OUR_CHANGES.md (EQDS pull pacer section)): a sink that still has
+    // uncredited bytes and is strictly more urgent than the sink the
+    // original order below would serve gets this pull, even if its
+    // one-window pull-target demand is momentarily 0.  When every sink has
+    // the same priority preemptingSink() returns NULL and nothing changes.
+    EqdsSink* preempt = NULL;
+    if (_rtx_senders.empty()) {
+        EqdsSink* would_serve = NULL;
+        if (!_active_senders.empty())
+            would_serve = *mostUrgent(_active_senders);
+        else if (!_idle_senders.empty())
+            would_serve = _idle_senders.front();
+        preempt = preemptingSink(would_serve);
+    }
+
+    if (_rtx_senders.empty() && _active_senders.empty() && _idle_senders.empty() && !preempt) {
         _active = false;
         return;
     }
@@ -2138,8 +2251,9 @@ void EqdsPullPacer::doNextEvent() {
     EqdsPullPacket* pullPkt;
 
     if (!_rtx_senders.empty()) {
-        sink = _rtx_senders.front();
-        _rtx_senders.pop_front();
+        auto it = mostUrgent(_rtx_senders);
+        sink = *it;
+        _rtx_senders.erase(it);
 
         pullPkt = sink->pull();
         if (EqdsSrc::_debug)
@@ -2148,16 +2262,27 @@ void EqdsPullPacer::doNextEvent() {
         // TODO if more pulls are needed, enqueue again
         if (sink->rtx_backlog() > 0)
             _rtx_senders.push_back(sink);
-        else if (sink->backlog() > 0 && !sink->inPullQueue()) {
+        else if (sink->backlog() > 0 && !sink->inPullQueue() && !sink->finished()) {
             _active_senders.push_back(sink);
             sink->addToPullQueue();
         }
+    } else if (preempt) {
+        sink = preempt;
+        pullPkt = sink->pull();
+        // round robin among equally urgent sinks: served one goes to the back
+        _live_sinks.remove(sink);
+        _live_sinks.push_back(sink);
+        if (EqdsSrc::_debug)
+            cout << "PullPacer: Prio: " << sink->getSrc()->nodename() << " backlog "
+                 << sink->backlog() << " uncredited " << sink->uncredited() << " at "
+                 << timeAsUs(eventlist().now()) << endl;
     } else if (!_active_senders.empty()) {
-        sink = _active_senders.front();
+        auto it = mostUrgent(_active_senders);
+        sink = *it;
 
         assert(sink->inPullQueue());
 
-        _active_senders.pop_front();
+        _active_senders.erase(it);
         pullPkt = sink->pull();
 
         // TODO if more pulls are needed, enqueue again
@@ -2167,6 +2292,15 @@ void EqdsPullPacer::doNextEvent() {
         if (sink->backlog() > 0)
             _active_senders.push_back(sink);
         else {  // this sink has had its demand satisfied, move it to idle senders list.
+            // NOTE: no isIdle() check, and requestPull() does not take the sink
+            // off _idle_senders, so a live sink collects about one idle entry
+            // per packet and each entry later yields one slow pull.  That
+            // over-grants beyond the one-window cap below, and a lone flow
+            // needs it: _maxwnd (265.6 KB) is below the BDP, and with one
+            // entry per sink a lone 7.4 MB flow takes 1.27x floor instead of
+            // 1.17x.  It is therefore kept (OUR_CHANGES.md (EQDS pull pacer section)).  What was
+            // a bug is that the entries outlived the flow; sinkFinished()
+            // now removes them.
             _idle_senders.push_back(sink);
             sink->removeFromPullQueue();
             sink->addToSlowPullQueue();
@@ -2204,6 +2338,51 @@ void EqdsPullPacer::doNextEvent() {
     eventlist().sourceIsPendingRel(*this, _pktTime);
 }
 
+// Strict priority across a sink's whole remaining flow, not just its
+// one-window pull-target demand.  Returns the most urgent live sink that
+// still has uncredited bytes, if it is strictly more urgent than
+// would_serve (the sink the FIFO / mostUrgent order would serve next), or,
+// when no sink is queued at all, strictly more urgent than some other live
+// sink.  Ties go to the first in _live_sinks, which doNextEvent rotates, so
+// equally urgent sinks are served round robin.  With equal priorities
+// everywhere (no "prio" in the matrix) this always returns NULL, so the
+// pacer behaves exactly as without it; a flow alone on its receiver is
+// never affected either.
+EqdsSink* EqdsPullPacer::preemptingSink(EqdsSink* would_serve) {
+    if (_live_sinks.size() < 2)
+        return NULL;
+    EqdsSink* best = NULL;
+    int least_urgent = 0;
+    bool first = true;
+    for (EqdsSink* s : _live_sinks) {
+        if (first || s->priority() > least_urgent)
+            least_urgent = s->priority();
+        first = false;
+        if ((!best || s->priority() < best->priority()) && s->uncredited() > 0)
+            best = s;
+    }
+    if (!best)
+        return NULL;
+    if (would_serve)
+        return best->priority() < would_serve->priority() ? best : NULL;
+    return best->priority() < least_urgent ? best : NULL;
+}
+
+// Strict priority between sinks on this pacer: return the first sink
+// with the lowest priority() value.  Because served sinks are re-queued
+// at the back, sinks of equal priority are still served round robin, so
+// when every sink has the same priority (no "prio" in the connection
+// matrix) the behaviour is identical to the original FIFO pacer.
+list<EqdsSink*>::iterator EqdsPullPacer::mostUrgent(list<EqdsSink*>& senders) {
+    assert(!senders.empty());
+    auto best = senders.begin();
+    for (auto i = std::next(best); i != senders.end(); i++) {
+        if ((*i)->priority() < (*best)->priority())
+            best = i;
+    }
+    return best;
+}
+
 bool EqdsPullPacer::isActive(EqdsSink* sink) {
     for (auto i = _active_senders.begin(); i != _active_senders.end(); i++) {
         if (*i == sink)
@@ -2230,6 +2409,7 @@ bool EqdsPullPacer::isIdle(EqdsSink* sink) {
 
 void EqdsPullPacer::requestPull(EqdsSink* sink) {
     if (isActive(sink)) {
+        cerr << "eqds.cpp:" << __LINE__ << " abort: EqdsPullPacer::requestPull for a sink that is already active" << endl;
         abort();
     }
     assert(sink->inPullQueue());
@@ -2240,6 +2420,38 @@ void EqdsPullPacer::requestPull(EqdsSink* sink) {
     if (!_active) {
         eventlist().sourceIsPendingRel(*this, 0);
         _active = true;
+    }
+}
+
+void EqdsPullPacer::sinkStarted(EqdsSink* sink) {
+    assert(!sink->inLiveList());
+    // If the new flow makes preemption possible (it is less urgent than a
+    // live sink, or more urgent), make sure the pacer is running.  Never
+    // the case when all priorities are equal, so no-prio runs see no extra
+    // events.
+    bool differs = false;
+    for (EqdsSink* s : _live_sinks)
+        if (s->priority() != sink->priority()) {
+            differs = true;
+            break;
+        }
+    _live_sinks.push_back(sink);
+    sink->setInLiveList(true);
+    if (differs && !_active) {
+        eventlist().sourceIsPendingRel(*this, 0);
+        _active = true;
+    }
+}
+
+void EqdsPullPacer::sinkFinished(EqdsSink* sink) {
+    // A finished flow needs no more credit: drop every entry for it.
+    _rtx_senders.remove(sink);
+    _active_senders.remove(sink);
+    _idle_senders.remove(sink);
+    sink->removeFromSlowPullQueue();  // clears _in_pull and _in_slow_pull
+    if (sink->inLiveList()) {
+        _live_sinks.remove(sink);
+        sink->setInLiveList(false);
     }
 }
 
