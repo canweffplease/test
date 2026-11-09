@@ -25,3 +25,9 @@ workloads/*.cm
 !workloads/kv128_rail.cm
 !workloads/kv_incast_8to1.cm
 !workloads/kv_llama70b_4k_tp8.cm
+
+# smoke and probe run outputs; real results are committed deliberately
+results/*smoke*
+results/*ref*
+results/*startns*
+results/*w0?L*
