@@ -97,7 +97,7 @@ you are citing.
 | Paper | Role |
 |---|---|
 | DistServe (OSDI '24) | Creates the traffic. Our motivation. |
-| Mooncake (FAST '25) | Production proof. Its Messenger component moves KV over GPUDirect RDMA but does not arbitrate between competing transfers. |
+| Mooncake (FAST '25) | Production proof. Transfer engine moves bytes but does not arbitrate between competing transfers. |
 | Jiang et al. survey (ACL Findings '26) | Names the gap: techniques evaluated in isolation, inconsistent metrics, tail latency rarely reported. |
 | HPCC (SIGCOMM '19) | Our strongest congestion control so far. Also the fallback simulator. |
 | DCQCN (SIGCOMM '15) | The deployed baseline. |
@@ -106,4 +106,4 @@ you are citing.
 | D3 (SIGCOMM '11) | Deadline-aware scheduling. |
 | Al-Fares (SIGCOMM '08) | Fat tree, where oversubscription comes from. |
 | Rail-only (arXiv 2307.12169) | Rail-optimized topology argument, made for training. We test it on inference. |
-| NetKV (Ojewale, arXiv 2606.03910, 2026) | Closest competitor. Network-aware decode-instance selection; explicitly scoped to placement and states it requires no transport changes. That is our gap. |
+| NetKV (2026 preprint) | Closest competitor. Explicitly scoped to placement, states it requires no transport changes. That is our gap. |

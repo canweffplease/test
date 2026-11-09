@@ -617,8 +617,7 @@ int main(int argc, char **argv) {
             eqds_snk->setEndTrigger(*trig);
         }
 
-        // lower is more urgent; see EqdsSink::set_priority()
-        eqds_snk->set_priority(crt->priority);
+        //eqds_snk->set_priority(crt->priority);
                         
         for (uint32_t p = 0; p < planes; p++) {
             switch (route_strategy) {
@@ -674,16 +673,14 @@ int main(int argc, char **argv) {
     }
 
     cout << "Done" << endl;
-    int new_pkts = 0, rtx_pkts = 0, bounce_pkts = 0, rts_pkts = 0, stale_nacks = 0;
+    int new_pkts = 0, rtx_pkts = 0, bounce_pkts = 0, rts_pkts = 0;
     for (size_t ix = 0; ix < eqds_srcs.size(); ix++) {
         new_pkts += eqds_srcs[ix]->_new_packets_sent;
         rtx_pkts += eqds_srcs[ix]->_rtx_packets_sent;
         rts_pkts += eqds_srcs[ix]->_rts_packets_sent;
         bounce_pkts += eqds_srcs[ix]->_bounces_received;
-        stale_nacks += eqds_srcs[ix]->_stale_nacks_received;
     }
     cout << "New: " << new_pkts << " Rtx: " << rtx_pkts << " RTS: " << rts_pkts << " Bounced: " << bounce_pkts << endl;
-    cout << "Stale NACKs ignored: " << stale_nacks << endl;
     /*
     list <const Route*>::iterator rt_i;
     int counts[10]; int hop;

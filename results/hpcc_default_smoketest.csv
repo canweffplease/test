@@ -1,0 +1,9 @@
+tag,flow,completion_us,bytes,floor_us,x_floor
+hpcc_default_smoketest,HPCC_2_10,3415.53,167772160,3355.4,1.018
+hpcc_default_smoketest,HPCC_4_12,3415.53,167772160,3355.4,1.018
+hpcc_default_smoketest,HPCC_3_11,4235.85,167772160,3355.4,1.262
+hpcc_default_smoketest,HPCC_0_8,4595.62,167772160,3355.4,1.370
+hpcc_default_smoketest,HPCC_1_9,7137.43,167772160,3355.4,2.127
+hpcc_default_smoketest,HPCC_6_14,8755.26,167772160,3355.4,2.609
+hpcc_default_smoketest,HPCC_5_13,9880.58,167772160,3355.4,2.945
+hpcc_default_smoketest,HPCC_7_15,10749.2,167772160,3355.4,3.204

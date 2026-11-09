@@ -1,125 +1,126 @@
 # Tasks
 
 Unassigned on purpose. Claim something by putting your name next to it when
-you start, and check it off when it lands. Items already checked off carry a
-pointer to the doc or script holding the evidence. Simulator changes are in
-`HTSIM/OUR_CHANGES.md`.
-
-Pull, run `./setup.sh`, and every result below reproduces with the
-`scripts/e*.sh` drivers.
+you start, and check it off when it lands.
 
 ## Done
 
-### Experiments
+- [x] Everyone can clone and run `./setup.sh` on macOS and Linux
+- [x] `.topo` files load. They did not, upstream bug, see
+      `HTSIM/OUR_CHANGES.md`
+- [x] All three oversubscription levels run. EQDS aborts on the
+      oversubscribed ones, which is a separate bug, and 8:1 needs `-q 2000`
+- [x] Workload generator, M1 through M7, in `scripts/`
+- [x] Azure traces parsed, 19,366 conversation and 8,819 code requests, with
+      the prompt length figure
+- [x] Offered load knob, calibrated at the decode side and on the window
+      actually emitted
+- [x] Five HTSIM bugs found and fixed, all written up in
+      `HTSIM/OUR_CHANGES.md`
+- [x] Results are now per request rather than per flow, with deadline
+      attainment and shard straggle
 
-- [x] E1, uncontended per tier cost table. `docs/E1.md`, `scripts/e1.sh`
-- [x] E2, topology sweep across 1:1, 4:1 and 8:1 crossed with load, plus a
-      PFC victim test. `docs/E2.md`, `scripts/e2.sh`. This absorbs what was
-      planned as a separate E5
-- [x] E3, congestion control from 30 to 90 percent load on ft16 and
-      ft128_1os. `docs/E3.md`, `scripts/e3.sh`
-- [x] E4, transport scheduling, SRPT and EDF at three slacks against fair
-      share, via EQDS receiver priority. `docs/E4.md`, `scripts/e4.sh`
-- [x] E6, incast across policies. `docs/E6.md`, `scripts/e6.sh`
-- [x] E7, scale up domain sweep, analytic plus trace driven Monte Carlo
-      rather than packet simulation. `docs/E7.md`, `scripts/e7_scaleup.py`
-- [x] Validation against the published HPCC and DCQCN figures.
-      `docs/VALIDATION.md`, `scripts/validation.sh`
-- [x] Rail optimised topology, expressed as `.topo` files plus host
-      relabelling, no C++ needed. `docs/TOPOLOGY_RAIL.md`, `scripts/rail.sh`
-- [x] Plotting and reporting. `scripts/plot.py`, `scripts/exp_report.py`
+## Ready to run
 
-### Infrastructure
+These need no new code. They need machine time and someone to read the
+output.
 
-- [x] Setup runs on macOS and Linux
-- [x] Workload generator with an offered load knob measured against a
-      computed bottleneck. `scripts/gen_workload.py`, `workloads/README.md`
-- [x] Azure LLM inference traces parsed, files in `data/azure/`
-- [x] Prefill pool queue and prefill cost model. `scripts/prefill.py`,
-      with `scripts/trace.py` and `scripts/models.py`. Standalone, not yet
-      wired into the generator
-- [x] Deterministic runs per seed. HPCC had been reseeding from the wall
-      clock
-- [x] Adaptive routing axis confirmed. `-strat ecmp_ar` runs, is switch
-      local and flowlet sticky, so it only reroutes after a PFC pause
+- [ ] E3, congestion control comparison, RoCE and DCQCN and EQDS on the same
+      generated workload, every run to completion. The preliminary read is
+      in the Findings section below and needs confirming
+- [ ] Buffer sweep, `-q` at 250, 500, 1000, 2000, 4000 on one policy and one
+      workload. Report MB per port, not htsim's packet count. Find where
+      each policy stops needing more
+- [ ] Load ceiling per policy. Raise load until the lossless invariant
+      breaks. This replaces the fixed 0.3, 0.5, 0.7, 0.9 sweep, which
+      assumed a range we now know is too wide for some policies
+- [ ] E2, topology sweep, 1:1 against 4:1 against 8:1, now that the workload
+      can actually saturate the uplinks
+- [ ] Conventional against rail numbering on the same workload. The earlier
+      hand written pair disagreed with the literature and that file predates
+      `placement.py`, so regenerate and recheck
+- [ ] E1, the uncontended per tier cost table, using the hand written
+      matrices
+- [ ] Plotting script. Load on x, distance from floor on y, one line per
+      policy. This figure is the centrepiece of the next progress report
+- [ ] Run the conv and code traces side by side, which is E8 nearly free
 
-### Simulator bugs found and fixed
+## Needs code or investigation
 
-One line each. Details under the named section in `HTSIM/OUR_CHANGES.md`.
+- [ ] Decide whether `parse.py` should report lossless violations as a
+      metric rather than refusing the run. With no congestion control they
+      are the result, not a misconfiguration
+- [ ] Reproduce one published figure from the HPCC paper
+- [ ] Reproduce one published figure from the DCQCN paper
+- [ ] Confirm `-strat ecmp_ar` runs, which is the adaptive routing axis
+- [ ] Decode side occupancy is not modelled in `prefill.py`. A decode
+      instance holds a request for its whole generation. Decide whether to
+      add it or defend the omission
+- [ ] `set_priority` is commented out in `main_eqds.cpp` and
+      `main_uec.cpp`. Find out whether uncommenting works. If it does,
+      SRPT becomes reachable. Timebox it and write it up as future work
+      otherwise
+- [ ] `htsim_eqds` aborts on oversubscribed fabrics. Five bare `abort()`
+      calls in `eqds.cpp` and one is being hit. Low priority, three of four
+      policies work without it
+- [ ] `htsim_hpcc` refuses a `-topo` file, so HPCC only runs on the default
+      16 node topology. Find out whether that is fixable
 
-- [x] DCQCN never terminated, `_last_alpha_update` never assigned
-- [x] Debug prints in hot paths, 97 million lines in one run
-- [x] Missing `<cstdint>` on macOS
-- [x] Every `.topo` file unloadable, `set_queue_sizes(0)` zeroed the queues
-- [x] EQDS aborted on a stale NACK after a retransmission timeout
-- [x] EQDS stalled silently, reorder table aliasing
-- [x] EQDS `set_priority` did not exist, and finished flows kept taking
-      credit
-- [x] HPCC had no `-topo`, ignored start times, reseeded from the clock, and
-      compounded its window per ACK until it overflowed
-- [x] Start times read as microseconds instead of picoseconds in RoCE, DCQCN
-      and EQDS
-- [x] DCQCN shared one alpha across flows, had no hyper increase, and used
-      step marking rather than RED
-- [x] Ours rather than HTSIM's, the floor computed against the wrong link
-      speed, `-linkspeed 400000` on 100 Gbps fabrics, and buffers too small
-      for 8:1 and for loaded four host ToRs
+## Findings to confirm or retract
 
-### Document corrections
+- [ ] **The earlier claim that DCQCN performs worse than no congestion
+      control is wrong** and has to come out of the document. It was
+      measured on eight flows with no contention. On a realistic workload
+      DCQCN is far better. Needs completed runs before the replacement claim
+      goes in
+- [ ] Preliminary ordering at load 0.3, from truncated runs, is EQDS with
+      zero violations, then DCQCN, then rail numbered RoCE, then plain RoCE
+      by a wide margin. Confirm with runs that finish
+- [ ] Llama-3-70B cannot load this fabric, topping out near 7 percent, while
+      Llama-2-13B reaches about 91 percent. Confirm, then state it as the
+      reason the 13B is the primary model
+- [ ] Buffer size is not the fix for the lossless failures. Going from 2 MB
+      to 8 MB per port made it slightly worse. Confirm on completed runs
 
-All applied in `docs/checkpoint2_draft.md`.
+## Document corrections
 
-- [x] Stale future tense in methodology 4.1
-- [x] OPT-13B replaced with Llama-2-13B
-- [x] 1.28 GB corrected to 1.34 GB throughout
-- [x] Typos, "file file", "flow are generated", "cacher sizes"
-- [x] Deleted the note claiming HTSIM lacks DCQCN. It ships it, inside
-      `htsim_roce` behind `-dcqcn`
-- [x] Added htsim provenance, the UEC reference simulator and the ETH Zurich
+- [ ] Fix stale future tense in methodology 4.1, the build is verified now
+- [ ] Replace OPT-13B with Llama-2-13B
+- [ ] Correct 1.28 GB to 1.34 GB throughout, and relabel the cache table,
+      which uses binary units under decimal headings
+- [ ] Mark the 32K prompt column as hypothetical. The longest prompt in
+      either trace is 14,050 tokens
+- [ ] Add the mean cache size under the real traces to the model table.
+      946 MB for the 13B on conversation, 378 MB for the 70B
+- [ ] Fix typos "file file", "flow are generated", "cacher sizes"
+- [ ] **Delete the Checkpoint 2 note saying HTSIM lacks DCQCN.** It ships
+      it, inside `htsim_roce` behind the `-dcqcn` flag
+- [ ] Add htsim provenance, the UEC reference simulator and the ETH Zurich
       SPCL fork
-- [x] Added the rail optimised paper to related work
+- [ ] Cite the Azure dataset properly. It is CC-BY and the required citation
+      is the Splitwise paper
+- [ ] Correct the collection date to 16 November 2023. The dataset page says
+      the 11th and the files say otherwise
+- [ ] State the capacity definition explicitly, measured at the decode side,
+      since every load number is relative to it
+- [ ] Add the rail optimised paper to related work
 
-## Blocking the report
+## Repository
 
-- [ ] Fill the `[[TODO]]` and `[[RESULT]]` placeholders in `docs/E2.md`,
-      `docs/E3.md`, `docs/E6.md` and `docs/checkpoint2_draft.md`. The DCQCN
-      rows of E2, E3 on ft128 and E6 are not in `results/` yet
-- [ ] E8, context length distribution, whether the rankings hold across
-      transfer sizes. Driver is `scripts/e8.sh`, matrices are in
-      `workloads/e8/`, and `docs/E8.md` is not written
-- [ ] Finish and submit Progress Report 2 from `docs/checkpoint2_draft.md`
+- [ ] Add all five of us as collaborators
+- [ ] Rename `master` to `main`
+- [ ] Open an upstream issue or pull request on spcl/HTSIM for the two bugs
+      that are clearly upstream problems, the DCQCN timer and the flow start
+      time unit conversion
 
-## Next
+## Stretch
 
-- [ ] Wire the prefill pool into the generator as an `--arrival
-      trace-prefill` mode, so a flow starts when its cache exists rather
-      than when its request arrives. Keep it off by default, since every
-      existing result assumes arrival time starts. `scripts/prefill.py`
-- [ ] E9, background training traffic, behaviour under multi-tenant
-      contention
-- [ ] Choose and state HPCC's N, the W_AI parameter. The default is 10
-- [ ] DCQCN RED thresholds on 100 Gbps fabrics. Kmin 12 KB and Kmax 400 KB
-      are in use and the BDP scaled choice is untested
-- [ ] Open an upstream issue or pull request on spcl/HTSIM for the clean
-      upstream bugs. The patch is `docs/htsim-changes-vs-upstream.patch`
+- [ ] E6, incast across congestion control policies
+- [ ] E7, scale up domain sweep at 8 and 72
+- [ ] Llama-3-8B as a third point between the 13B and the 70B
 
-## Known gaps, decide whether to close or document
+## Minimum for the next progress report
 
-- [ ] Scheduling works in EQDS only. `prio` has no effect in RoCE or HPCC,
-      so E4 is EQDS only
-- [ ] UEC transport as a fifth policy. Its `set_priority` is still commented
-      out and its pull pacer is separate
-- [ ] True rail only topology, no spine, with an NVLink relay. Needs C++.
-      See `docs/TOPOLOGY_RAIL.md`
-- [ ] Decode side occupancy is not modelled. A decode instance holds a
-      request for its whole generation, so contention on the decode pool is
-      understated
-
-## Deadlines
-
-- [ ] Presentation, December 1
-- [ ] Final paper, December 8
-
-## Minimum for Progress Report 2
-
-**Met.** See `docs/checkpoint2_draft.md`.
+Setup done, topology files verified, the E1 table, one E3 plot with
+analysis, one validation number, and a clean document. Everything else is
+upside.

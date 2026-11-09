@@ -1,0 +1,9 @@
+tag,flow,completion_us,bytes,floor_us,x_floor
+dcqcn_default_smoketest,Roce_5_13,3421.62,167772160,3355.4,1.020
+dcqcn_default_smoketest,Roce_3_11,7880.24,167772160,3355.4,2.348
+dcqcn_default_smoketest,Roce_1_9,7935.78,167772160,3355.4,2.365
+dcqcn_default_smoketest,Roce_0_8,8020.1,167772160,3355.4,2.390
+dcqcn_default_smoketest,Roce_2_10,8041.87,167772160,3355.4,2.397
+dcqcn_default_smoketest,Roce_6_14,12027,167772160,3355.4,3.584
+dcqcn_default_smoketest,Roce_4_12,12043.2,167772160,3355.4,3.589
+dcqcn_default_smoketest,Roce_7_15,12097.6,167772160,3355.4,3.605

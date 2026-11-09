@@ -43,7 +43,7 @@ int DEFAULT_NODES = 432;
 EventList eventlist;
 
 void exit_error(char* progr) {
-    cout << "Usage " << progr << " [-nodes N]\n\t[-q queue_size]\n\t[-queue_type composite|random|lossless|lossless_input|]\n\t[-tm traffic_matrix_file]\n\t[-topo topology_file]\n\t[-strat route_strategy (single,\n\tecmp_host,ecmp_ar,\n\tecmp_host_ar ar_thresh)]\n\t[-log log_level]\n\t[-seed random_seed]\n\t[-end end_time_in_usec]\n\t[-mtu MTU]\n\t[-hop_latency x] per hop wire latency in us,default 1\n\t[-switch_latency x] switching latency in us, default 0\n\t[-start_delta] time in us to randomly delay the start of connections\n\t[-pfc_thresholds low high]\n\t[-hpcc_legacy] original HTSIM per-ACK window update\n\t[-hpcc_eta x] [-hpcc_maxstage n] [-hpcc_N n] [-hpcc_wai bytes] [-hpcc_T us] [-hpcc_trace]" << endl;
+    cout << "Usage " << progr << " [-nodes N]\n\t[-q queue_size]\n\t[-queue_type composite|random|lossless|lossless_input|]\n\t[-tm traffic_matrix_file]\n\t[-strat route_strategy (single,\n\tecmp_host,ecmp_ar,\n\tecmp_host_ar ar_thresh)]\n\t[-log log_level]\n\t[-seed random_seed]\n\t[-end end_time_in_usec]\n\t[-mtu MTU]\n\t[-hop_latency x] per hop wire latency in us,default 1\n\t[-switch_latency x] switching latency in us, default 0\n\t[-start_delta] time in us to randomly delay the start of connections\n\t[-pfc_thresholds low high]" << endl;
     exit(1);
 }
 
@@ -77,10 +77,8 @@ int main(int argc, char **argv) {
     int i = 1;
     filename << "logout.dat";
     int end_time = 1000;//in microseconds
-    bool hpcc_T_set = false;
 
     char* tm_file = NULL;
-    char* topo_file = NULL;
 
     while (i<argc) {
         if (!strcmp(argv[i],"-o")) {
@@ -158,10 +156,6 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i],"-tm")){
             tm_file = argv[i+1];
             cout << "traffic matrix input file: "<< tm_file << endl;
-            i++;
-        } else if (!strcmp(argv[i],"-topo")){
-            topo_file = argv[i+1];
-            cout << "FatTree topology input file: "<< topo_file << endl;
             i++;
         } else if (!strcmp(argv[i],"-q")){
             queuesize = atoi(argv[i+1]);
@@ -241,37 +235,6 @@ int main(int argc, char **argv) {
                 exit(1);
             }
             i++;
-        } else if (!strcmp(argv[i],"-hpcc_legacy")){
-            // original HTSIM window update (per-ACK compounding), for comparison
-            HPCCSrc::_legacy = true;
-            cout << "HPCC legacy window update" << endl;
-        } else if (!strcmp(argv[i],"-hpcc_eta")){
-            HPCCSrc::_eta = atof(argv[i+1]);
-            cout << "HPCC eta " << HPCCSrc::_eta << endl;
-            i++;
-        } else if (!strcmp(argv[i],"-hpcc_maxstage")){
-            HPCCSrc::_max_stages = atoi(argv[i+1]);
-            cout << "HPCC maxStage " << HPCCSrc::_max_stages << endl;
-            i++;
-        } else if (!strcmp(argv[i],"-hpcc_N")){
-            // expected flows per link; W_AI = W_init*(1-eta)/N
-            HPCCSrc::_N = atoi(argv[i+1]);
-            cout << "HPCC N " << HPCCSrc::_N << endl;
-            i++;
-        } else if (!strcmp(argv[i],"-hpcc_wai")){
-            // W_AI in bytes, overrides the W_init*(1-eta)/N default
-            HPCCSrc::_Wai = atoi(argv[i+1]);
-            HPCCSrc::_Wai_set = true;
-            cout << "HPCC W_AI " << HPCCSrc::_Wai << " bytes" << endl;
-            i++;
-        } else if (!strcmp(argv[i],"-hpcc_T")){
-            // base RTT T in us (W_init = linkspeed * T); default 13.1, legacy 12
-            HPCCSrc::_T = timeFromUs(atof(argv[i+1]));
-            hpcc_T_set = true;
-            cout << "HPCC T " << timeAsUs(HPCCSrc::_T) << " us" << endl;
-            i++;
-        } else if (!strcmp(argv[i],"-hpcc_trace")){
-            HPCCSrc::_trace = true;
         }  else if (!strcmp(argv[i],"-strat")){
             if (!strcmp(argv[i+1], "perm")) {
                 route_strategy = SCATTER_PERMUTE;
@@ -309,8 +272,6 @@ int main(int argc, char **argv) {
         i++;
     }
 
-    if (HPCCSrc::_legacy && !hpcc_T_set)
-        HPCCSrc::_T = timeFromUs(12.0);   // original HTSIM base RTT
     srand(seed);
     srandom(seed);
 
@@ -380,20 +341,8 @@ int main(int argc, char **argv) {
 #ifdef FAT_TREE
     unique_ptr<FatTreeTopology> top;
     unique_ptr<FatTreeTopologyCfg> topo_cfg;
-    if (topo_file) {
-        // Same as main_roce.cpp: the file sets tiers, radices, per-tier link
-        // speeds and latencies; queuesize (from -q) fills every tier's queues.
-        topo_cfg = FatTreeTopologyCfg::load(topo_file, queuesize, qt, snd_type);
-
-        if (topo_cfg->no_of_nodes() != no_of_nodes) {
-            cerr << "Mismatch between connection matrix (" << no_of_nodes << " nodes) and topology ("
-                    << topo_cfg->no_of_nodes() << " nodes)" << endl;
-            exit(1);
-        }
-    } else {
-        topo_cfg = make_unique<FatTreeTopologyCfg>(3, no_of_nodes, linkspeed, queuesize, 
-                                                   hop_latency, switch_latency, qt, snd_type);
-    }
+    topo_cfg = make_unique<FatTreeTopologyCfg>(3, no_of_nodes, linkspeed, queuesize, 
+                                               hop_latency, switch_latency, qt, snd_type);
 
     top = make_unique<FatTreeTopology>(topo_cfg.get(), qlf, &eventlist, nullptr);
 #endif

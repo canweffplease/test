@@ -69,10 +69,6 @@ int main(int argc, char **argv) {
 
     bool dcqcn = false;
     int ecn_threshold = 0;
-    // probabilistic ECN marking (OUR_CHANGES.md (section "DCQCN switch marking: probabilistic (RED) ECN")); decimal KB. Any of the
-    // three flags turns it on; the others then default to these 400 G values.
-    bool ecn_red = false;
-    double ecn_kmin_kb = 50, ecn_kmax_kb = 400, ecn_pmax = 0.01;
 
     queue_type snd_type = FAIR_PRIO;
 
@@ -111,30 +107,6 @@ int main(int argc, char **argv) {
             dcqcn = true;
             ecn_threshold = atoi (argv[i+1]);
             cout << "dcqcn ecn threshold "<< ecn_threshold << endl;
-            i++;
-        } else if (!strcmp(argv[i],"-dcqcn_legacy")) {   // original HTSIM DCQCN (OUR_CHANGES.md (section "DCQCN made faithful to the paper"))
-            DCQCNSrc::_legacy = true;
-            cout << "dcqcn legacy mode" << endl;
-        } else if (!strcmp(argv[i],"-dcqcn_rai")) {      // R_AI in Mbps (default 0.1% of line rate)
-            DCQCNSrc::_RAI_cfg = speedFromMbps(atof(argv[i+1]));
-            cout << "dcqcn R_AI Mbps " << argv[i+1] << endl;
-            i++;
-        } else if (!strcmp(argv[i],"-dcqcn_rhai")) {     // R_HAI in Mbps (default 0.5% of line rate)
-            DCQCNSrc::_RHAI_cfg = speedFromMbps(atof(argv[i+1]));
-            cout << "dcqcn R_HAI Mbps " << argv[i+1] << endl;
-            i++;
-        } else if (!strcmp(argv[i],"-dcqcn_g")) {        // alpha gain g (default 1/256)
-            DCQCNSrc::_g = atof(argv[i+1]);
-            cout << "dcqcn g " << DCQCNSrc::_g << endl;
-            i++;
-        } else if (!strcmp(argv[i],"-ecn_kmin")) {       // RED marking Kmin, KB (OUR_CHANGES.md (section "DCQCN switch marking: probabilistic (RED) ECN"))
-            ecn_red = true; ecn_kmin_kb = atof(argv[i+1]);
-            i++;
-        } else if (!strcmp(argv[i],"-ecn_kmax")) {       // RED marking Kmax, KB
-            ecn_red = true; ecn_kmax_kb = atof(argv[i+1]);
-            i++;
-        } else if (!strcmp(argv[i],"-ecn_pmax")) {       // RED marking Pmax, 0..1
-            ecn_red = true; ecn_pmax = atof(argv[i+1]);
             i++;
         } else if (!strcmp(argv[i],"-failed")){
             // number of failed links (failed to 25% linkspeed)
@@ -361,18 +333,6 @@ int main(int argc, char **argv) {
     if (dcqcn){
         LosslessOutputQueue::_ecn_enabled = true;
         LosslessOutputQueue::_K = ecn_threshold * Packet::data_packet_size();
-        if (ecn_red) {
-            if (ecn_kmin_kb < 0 || ecn_kmax_kb < ecn_kmin_kb || ecn_pmax < 0 || ecn_pmax > 1) {
-                cout << "bad -ecn_kmin/-ecn_kmax/-ecn_pmax: need 0 <= Kmin <= Kmax, 0 <= Pmax <= 1" << endl;
-                exit(1);
-            }
-            LosslessOutputQueue::enable_red((mem_b)(ecn_kmin_kb * 1000), (mem_b)(ecn_kmax_kb * 1000), ecn_pmax, seed);
-            cout << "ECN RED marking Kmin " << ecn_kmin_kb << " KB Kmax " << ecn_kmax_kb
-                 << " KB Pmax " << ecn_pmax << " (replaces step at -dcqcn K)" << endl;
-        }
-    } else if (ecn_red) {
-        cout << "-ecn_kmin/-ecn_kmax/-ecn_pmax need -dcqcn" << endl;
-        exit(1);
     }
 
     eventlist.setEndtime(timeFromUs((uint32_t)end_time));

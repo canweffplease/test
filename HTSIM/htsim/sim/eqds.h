@@ -164,7 +164,6 @@ public:
     uint32_t _rtx_packets_sent;
     uint32_t _rts_packets_sent;
     uint32_t _bounces_received;
-    uint32_t _stale_nacks_received;  // NACKs for packets already RTO'd or ACKed
 
     static bool _debug;
     bool _debug_src;
@@ -263,17 +262,6 @@ public:
     // spendCredit returns true if we can send, and sets whether the send is speculative
     bool spendCredit(mem_b pktsize, bool& speculative);
     EqdsDataPacket::seq_t _highest_sent;
-    // Highest cumulative ACK seen.  The sink's out-of-order bitmap
-    // (_epsn_rx_bitmap) only covers eqdsMaxInFlightPkts sequence numbers
-    // above its cumulative ACK, so we must never send a PSN at or beyond
-    // _highest_cum_ack + eqdsMaxInFlightPkts or the bitmap aliases.  See
-    // HTSIM/OUR_CHANGES.md.
-    EqdsDataPacket::seq_t _highest_cum_ack;
-    // PSNs kept in reserve for RTS packets, which also consume a PSN.
-    static const unsigned _rts_psn_reserve = 64;
-    bool newDataBlockedByWindow() const {
-        return _highest_sent + _rts_psn_reserve >= _highest_cum_ack + eqdsMaxInFlightPkts;
-    }
     mem_b _in_flight;
     bool _send_blocked_on_nic;
 
@@ -412,16 +400,6 @@ class EqdsSink : public DataReceiver {
     }
 
     EqdsBasePacket::pull_quanta rtx_backlog() { return _retx_backlog; }
-
-    // Scheduling priority of this receiver relative to the other sinks
-    // sharing the same EqdsPullPacer (i.e. the same receiving host).
-    // LOWER IS MORE URGENT, as in NDP.  The pacer grants credit (pulls)
-    // to the most urgent sink with outstanding demand; sinks of equal
-    // priority are served round robin, exactly as before.  Set from the
-    // connection matrix "prio <N>" token (default 2000000), so prio =
-    // flow size gives shortest-flow-first and prio = deadline gives EDF.
-    void set_priority(int priority) { _priority = priority; }
-    inline int priority() const { return _priority; }
     const Stats& stats() const { return _stats; }
     void connectPort(uint32_t port_num, EqdsSrc& src, const Route& routeback);
     const Route* getPortRoute(uint32_t port_num) const {return _ports[port_num]->route();}
@@ -443,23 +421,6 @@ class EqdsSink : public DataReceiver {
         _in_slow_pull = false;
     }
     inline EqdsNIC* getNIC() const { return &_nic; }
-
-    // Flow state as the receiver knows it (OUR_CHANGES.md (EQDS pull pacer section)).  The
-    // receiver learns the message length with the first packet of the flow
-    // (simulated by reading the source's flow size, as the sink's existing
-    // assert on _received_bytes already does).
-    //   started():   at least one packet (data, trimmed header or RTS) arrived
-    //   finished():  every payload byte has arrived; the pacer never credits
-    //                a finished sink again
-    //   uncredited(): pull quanta the receiver has not yet granted, i.e. the
-    //                flow's wire bytes minus the speculative first window
-    //                (_maxwnd) minus all credit pulled so far.  This is the
-    //                sink's remaining backlog for strict priority.
-    inline bool started() const { return _started; }
-    inline bool finished() const { return _finished; }
-    EqdsBasePacket::pull_quanta uncredited() const;
-    inline bool inLiveList() const { return _in_live; }
-    inline void setInLiveList(bool v) { _in_live = v; }
 
     uint16_t nextEntropy();
 
@@ -491,13 +452,8 @@ class EqdsSink : public DataReceiver {
     EqdsBasePacket::pull_quanta _latest_pull;
     EqdsBasePacket::pull_quanta _highest_pull_target;
 
-    int _priority;       // lower is more urgent, see set_priority()
     bool _in_pull;       // this tunnel is in the pull queue.
     bool _in_slow_pull;  // this tunnel is in the slow pull queue.
-    bool _started;       // first packet of the flow has arrived
-    bool _finished;      // all payload bytes have arrived
-    bool _in_live;       // in the pacer's _live_sinks list
-    void updateFlowState();  // called after every received packet
 
     mem_b _received_bytes;
 
@@ -531,28 +487,13 @@ class EqdsPullPacer : public EventSource {
     bool isRetransmitting(EqdsSink* sink);
     bool isIdle(EqdsSink* sink);
 
-    // Flow lifecycle, from the sink (OUR_CHANGES.md (EQDS pull pacer section)).  sinkStarted
-    // adds the sink to _live_sinks; sinkFinished removes it from every list
-    // so a finished flow is never credited again.
-    void sinkStarted(EqdsSink* sink);
-    void sinkFinished(EqdsSink* sink);
-
     void updateReceiverCc(bool ecn, bool trim);
     static bool _oversubscribed_cc;
 
    private:
-    // _rtx_senders and _active_senders are served in priority order
-    // (lowest EqdsSink::priority() first, round robin among equals), see
-    // mostUrgent().  _idle_senders (speculative slow pulls) stay FIFO.
-    list<EqdsSink*> _rtx_senders;
-    list<EqdsSink*> _active_senders;
-    list<EqdsSink*> _idle_senders;
-    static list<EqdsSink*>::iterator mostUrgent(list<EqdsSink*>& senders);
-
-    // Every sink on this pacer whose flow has started and not finished,
-    // in round-robin order for strict priority (see preemptingSink()).
-    list<EqdsSink*> _live_sinks;
-    EqdsSink* preemptingSink(EqdsSink* would_serve);
+    list<EqdsSink*> _rtx_senders;     // TODO priorities?
+    list<EqdsSink*> _active_senders;  // TODO priorities?
+    list<EqdsSink*> _idle_senders;    // TODO priorities?
 
     const simtime_picosec _pktTime;
     bool _active;

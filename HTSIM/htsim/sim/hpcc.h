@@ -113,15 +113,6 @@ public:
     static uint32_t _max_stages;//Maximum stages for additive increases
     static uint32_t _N;//maximum number of flows.
     static uint32_t _Wai;//Additive increase amount.
-    // Our additions (OUR_CHANGES.md (HPCC fidelity section)). _legacy selects the original
-    // HTSIM window update (per-ACK compounding, stale INT reference); the
-    // default false is Algorithm 1 of the HPCC paper. _Wai_set is true when
-    // -hpcc_wai fixed W_AI; otherwise W_AI = W_init*(1-eta)/N.
-    static bool _legacy;
-    static bool _Wai_set;
-    static bool _trace;      // -hpcc_trace: one line per reference update
-
-    void print_hpcc_stats();
 
 private:
     IntEntry _link_info[5];
@@ -132,23 +123,8 @@ private:
     double _U;
     linkspeed_bps _pacing_rate;
 
-    // faithful (Algorithm 1) state
-    double _Wc_d;            // reference window Wc, bytes
-    double _W_init, _W_max, _W_min;
-    bool _have_ref;          // reference INT L stored (first ACK seen)
-    simtime_picosec _last_goback_ts;  // send time bound of the last go-back-N
-    // statistics, printed at flow end
-    double _stat_maxW, _stat_minW;
-    uint64_t _stat_wc_updates, _stat_stale_nacks;
-    double _tr_tau, _tr_uq, _tr_utx, _tr_hop;   // -hpcc_trace accumulators
-
     double measureInFlight(const HPCCAck& ack);
     HPCCPacket::seq_t computeWind(double U, bool updateWc);
-    // faithful versions
-    double measureInflightPaper(const HPCCAck& ack);
-    double computeWindPaper(double U, bool updateWc);
-    void storeReference(const HPCCAck& ack);
-    void setWindow(double W);
 
     inline void update_spacing(){_packet_spacing = (simtime_picosec)((Packet::data_packet_size()+HPCCPacket::ACKSIZE) * (pow(10.0,12.0) * 8) / _pacing_rate);}
 

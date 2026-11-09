@@ -2,6 +2,9 @@
 HTSIM/htsim/sim/build/
 HTSIM/htsim/sim/datacenter/htsim_*
 
+# raw simulator logs are large; the parsed CSVs are what we keep
+results/*.log
+
 .DS_Store
 __pycache__/
 *.pyc
@@ -9,11 +12,22 @@ __pycache__/
 
 # linux build made inside the Cowork VM; macOS build goes in build/
 HTSIM/htsim/sim/build-linux/
+data/
 
-# Azure LLM traces: the 2023 CSVs (~1 MB) are committed; the 2024 week-long
-# release is 0.7-1.1 GB per file, too large to commit
-data/azure/*_1week.csv
-HTSIM/htsim/sim/build_*/
+# Generated workloads. The generator is deterministic, so a .cm and its
+# sidecar are fully reproduced by the command in workloads/MANIFEST.md plus
+# the Azure trace. Committing them adds megabytes of derived data to every
+# clone. The four hand written kv*.cm files below predate the generator and
+# stay tracked.
+workloads/*.json
+workloads/*.cm
+!workloads/kv128_conv.cm
+!workloads/kv128_rail.cm
+!workloads/kv_incast_8to1.cm
+!workloads/kv_llama70b_4k_tp8.cm
 
-# simulation outputs (CSV, JSON, figures, logs) are generated locally and not tracked
-results/
+# smoke and probe run outputs; real results are committed deliberately
+results/*smoke*
+results/*ref*
+results/*startns*
+results/*w0?L*

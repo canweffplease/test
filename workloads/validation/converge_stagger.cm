@@ -1,6 +1,0 @@
-Nodes 16
-Connections 4
-0->8 id 1 start 0 size 491666667
-4->8 id 2 start 2000000000 size 291666667
-12->8 id 3 start 4000000000 size 191666667
-2->8 id 4 start 6000000000 size 125000000

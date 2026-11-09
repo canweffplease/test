@@ -1,6 +1,5 @@
 // -*- c-basic-offset: 4; indent-tabs-mode: nil -*- 
 #include <math.h>
-#include <stdlib.h>
 #include <iostream>
 #include <algorithm>
 #include "dcqcn.h"
@@ -20,28 +19,16 @@ using namespace std;
 simtime_picosec DCQCNSink::_cnp_interval = timeFromUs(50.0);
 simtime_picosec DCQCNSrc::_cc_update_period = timeFromUs(55.0);
 
-// Paper parameters (Zhu et al., SIGCOMM 2015): g = 1/256, B = 10 MB, F = 5,
-// T = K = 55 us, R_AI = 40 Mbps and R_HAI = 200 Mbps on 40 Gbps NICs. We scale
-// R_AI and R_HAI with the line rate (0.1 % and 0.5 %). See OUR_CHANGES.md (section "DCQCN made faithful to the paper").
+double DCQCNSrc::_alpha = 1;
 double DCQCNSrc::_g = .00390625; // g = 1/256
-uint64_t DCQCNSrc::_B = 10000000; // bytes to go until we fire the byte counter
-uint32_t DCQCNSrc::_F = 5;
-bool DCQCNSrc::_legacy = false;
-linkspeed_bps DCQCNSrc::_RAI_cfg = 0;
-linkspeed_bps DCQCNSrc::_RHAI_cfg = 0;
-double DCQCNSrc::_RAI_frac = 0.001;
-double DCQCNSrc::_RHAI_frac = 0.005;
-double DCQCNSrc::_shared_alpha = 1;   // legacy only
-// Debug: DCQCN_TRACE=1 in the environment prints one line per CNP and per
-// rate increase ("DCQCN_TRACE <us> <flow> <event> RC_Gbps RT_Gbps alpha T BC").
-static bool dcqcn_trace = getenv("DCQCN_TRACE") != NULL;
+uint64_t DCQCNSrc::_B = 10000000; // number of bytes to go until we fire the byte counter
 
-void DCQCNTimer::doNextEvent() {
-    _src->timerFired();
-}
+uint32_t DCQCNSrc::_F = 5;
+linkspeed_bps DCQCNSrc::_RAI = 0;
+linkspeed_bps DCQCNSrc::_RHAI = 0;
 
 DCQCNSrc::DCQCNSrc(RoceLogger* logger, TrafficLogger* pktlogger, EventList &eventlist, linkspeed_bps rate)
-    : RoceSrc(logger,pktlogger,eventlist,rate), _timer(eventlist, this)
+    : RoceSrc(logger,pktlogger,eventlist,rate)
 {
     _cnps_received = 0;
 
@@ -52,15 +39,8 @@ DCQCNSrc::DCQCNSrc(RoceLogger* logger, TrafficLogger* pktlogger, EventList &even
     //target transmit rate
     _RT = rate;
 
-    _alpha = 1;
-    if (_legacy) {
-        // original HTSIM values: 5 % and 10 % of line rate
-        _RAI = rate / 20;
-        _RHAI = rate / 10;
-    } else {
-        _RAI = _RAI_cfg ? _RAI_cfg : (linkspeed_bps)(_RAI_frac * rate);
-        _RHAI = _RHAI_cfg ? _RHAI_cfg : (linkspeed_bps)(_RHAI_frac * rate);
-    }
+    _RAI = rate / 20;
+    _RHAI = rate / 10;
 
     _last_cc_update = 0;
     _last_alpha_update = 0;
@@ -69,26 +49,12 @@ DCQCNSrc::DCQCNSrc(RoceLogger* logger, TrafficLogger* pktlogger, EventList &even
     _BC = 0;
     _byte_counter = 0;
     _old_highest_sent = 0;
-
-    _timer_due = 0;
-    _timer_started = false;
-}
-
-void DCQCNSrc::armTimer() {
-    _timer_due = eventlist().now() + _cc_update_period;
-    eventlist().sourceIsPending(_timer, _timer_due);
 }
 
 void DCQCNSrc::processCNP(const CNPPacket& cnp){
-    double& a = alpha();   // per flow; the shared static only with -dcqcn_legacy
     _RT = _RC;
-    _RC = _RC * (1-a/2);
-    // Minimum rate clamp. Real DCQCN NICs have one; without it a flow that is
-    // cut every 50 us for a few ms reaches an integer rate of 0, and the pacer
-    // in roce.h then divides by it (E8 hit this on one seed). One R_AI step,
-    // 0.1% of line rate, matches where additive increase would restart from.
-    if (_RC < _RAI) _RC = _RAI;
-    a = (1-_g)*a + _g;
+    _RC = _RC * (1-_alpha/2);
+    _alpha = (1-_g)*_alpha + _g;
 
     //_ai_state = increase_state::fast_recovery;
 
@@ -97,8 +63,7 @@ void DCQCNSrc::processCNP(const CNPPacket& cnp){
     _byte_counter = 0;
     _old_highest_sent = _highest_sent;
 
-    if (dcqcn_trace)
-        cout << "DCQCN_TRACE " << timeAsUs(eventlist().now()) << " " << _flow._name << " cnp " << _RC/1e9 << " " << _RT/1e9 << " " << a << " " << _T << " " << _BC << endl;
+    //cout << "At " << timeAsUs(eventlist().now()) << " " << _RC << " CNP received, reduced rate; target rate is " << _RT << " node " << nodename() << " alpha is " << _alpha;
 
     _pacing_rate = _RC;
     update_spacing();
@@ -107,14 +72,7 @@ void DCQCNSrc::processCNP(const CNPPacket& cnp){
     _last_cc_update = eventlist().now();
     _last_alpha_update = eventlist().now();
 
-    if (_legacy) {
-        // original: wakes the source itself, which also starts another pacing chain
-        eventlist().sourceIsPendingRel(*this, _cc_update_period);
-    } else {
-        // restart both the rate-increase timer and the alpha timer
-        _timer_started = true;
-        armTimer();
-    }
+    eventlist().sourceIsPendingRel(*this, _cc_update_period);
 }
 
 void DCQCNSrc::increaseRate(){
@@ -130,13 +88,11 @@ void DCQCNSrc::increaseRate(){
     } else if (min(_T,_BC) > _F){
         //hyper increase
         _RT = _RT + (min(_T,_BC)-_F)* _RHAI;
-        if (!_legacy && _RT > _link) _RT = _link;
         _RC = (_RT + _RC) / 2;
 
     } else {
         //active increase 
         _RT += _RAI;
-        if (!_legacy && _RT > _link) _RT = _link;
         _RC = (_RT + _RC) / 2;
 
     }
@@ -148,66 +104,10 @@ void DCQCNSrc::increaseRate(){
     _pacing_rate = _RC;
     update_spacing();
 
-    if (dcqcn_trace)
-        cout << "DCQCN_TRACE " << timeAsUs(eventlist().now()) << " " << _flow._name << " inc " << _RC/1e9 << " " << _RT/1e9 << " " << alpha() << " " << _T << " " << _BC << endl;
-    //cout << "At " << timeAsUs(eventlist().now()) << " " << _RC << " increase target rate is " << _RT << " node " << nodename() << " packet spacing is " << timeAsUs(_packet_spacing) << " _T is " << _T << " _BC is " << _BC << " byte counter is " << _byte_counter << " alpha is " << alpha() << endl;
-}
-
-// Faithful mode: the rate-increase timer T and the alpha timer K, both 55 us,
-// both restarted by a CNP (processCNP). Runs on its own EventSource.
-void DCQCNSrc::timerFired(){
-    if (eventlist().now() != _timer_due)   // superseded by a later armTimer()
-        return;
-    if (_done)
-        return;
-
-    if (eventlist().now()-_last_alpha_update >= _cc_update_period){
-        _alpha = (1-_g)*_alpha;
-        _last_alpha_update = eventlist().now();
-    }
-
-    if (eventlist().now()-_last_cc_update >= _cc_update_period){
-        _last_cc_update = eventlist().now();
-        _T ++;
-        increaseRate();
-    }
-
-    armTimer();
+    //cout << "At " << timeAsUs(eventlist().now()) << " " << _RC << " increase target rate is " << _RT << " node " << nodename() << " packet spacing is " << timeAsUs(_packet_spacing) << " _T is " << _T << " _BC is " << _BC << " byte counter is " << _byte_counter << " alpha is " << _alpha << endl;
 }
 
 void DCQCNSrc::doNextEvent(){
-    if (!_legacy) {
-        if (_done)          // all data ACKed: let the pacing chain die
-            return;
-
-        RoceSrc::doNextEvent();
-
-        if (_done || !_flow_started)
-            return;
-
-        if (!_timer_started) {
-            // timers run from the start of the flow
-            _timer_started = true;
-            _last_cc_update = eventlist().now();
-            _last_alpha_update = eventlist().now();
-            armTimer();
-        }
-
-        // Byte counter. RoceSrc::_highest_sent counts PACKETS (roce.cpp
-        // send_packet), so convert to bytes before comparing with _B.
-        if (_highest_sent >= _old_highest_sent)
-            _byte_counter += (_highest_sent - _old_highest_sent) * (uint64_t)_mss;
-        _old_highest_sent = _highest_sent;   // go-back-N rewinds it; do not underflow
-
-        if (_byte_counter >= _B){
-            _byte_counter -= _B;
-            _BC++;
-            increaseRate();
-        }
-        return;
-    }
-
-    // ---------------- legacy (-dcqcn_legacy): original HTSIM code ----------------
     bool reschedule = false;
 
     RoceSrc::doNextEvent();
@@ -217,7 +117,6 @@ void DCQCNSrc::doNextEvent(){
 
     //cout << "Adding " << (_highest_sent - _old_highest_sent) << " to sent bytes " << _byte_counter << " " << _highest_sent << endl;
 
-    // NOTE: _highest_sent is in packets, so this counts packets, not bytes.
     _byte_counter += (_highest_sent - _old_highest_sent);
     _old_highest_sent = _highest_sent;
 
@@ -230,7 +129,7 @@ void DCQCNSrc::doNextEvent(){
     }
 
     if (eventlist().now()-_last_alpha_update >= _cc_update_period){
-        _shared_alpha = (1-_g)*_shared_alpha;     // one alpha for every flow
+        _alpha = (1-_g)*_alpha;
         _last_alpha_update = eventlist().now();   // FIX: was never assigned
         reschedule = true;
     }    
