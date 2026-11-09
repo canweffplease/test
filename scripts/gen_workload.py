@@ -50,6 +50,48 @@ from trace import load_trace                        # noqa: E402
 PS_PER_SECOND = 10 ** 12
 
 
+DEFAULT_LINK_BPS = 100e9      # fat_tree_128_*.topo, Downlink_speed_Gbps 100
+
+
+def capacity_bps(args, link_bps):
+    """Offered load is measured against the DECODE side.
+
+    Every host has one NIC. The prefill pool can only push what the decode
+    pool can absorb, so the smaller of the two is the real capacity. With an
+    uneven split, measuring at the prefill side produces workloads the
+    receivers physically cannot take: a 13 prefill to 3 decode layout offers
+    10.4 Tbps into 2.4 Tbps of receive capacity, which is a permanent 4.3 to
+    1 incast no buffer setting can absorb. We found that the hard way.
+
+    Splitwise's 4:1 prefill to decode ratio is a compute ratio, not a network
+    one. A decode instance holds a request for its whole generation, so it
+    serves fewer requests, but it still has exactly one NIC per GPU. For
+    bandwidth the balanced split is close to 1:1.
+
+    Stated explicitly because every load figure in the paper is relative to
+    this definition.
+    """
+    decode_hosts = args.decode * args.tp
+    prefill_hosts = args.prefill * args.tp
+    return min(decode_hosts, prefill_hosts) * link_bps
+
+
+def rate_scale_for_load(requests, model, args, link_bps):
+    """Arrival compression factor that offers `args.load` of capacity.
+
+        requests/sec = load * capacity / mean cache bits
+        rate scale   = that rate / the trace's native rate
+    """
+    n = len(requests)
+    span = requests[-1].arrival_s - requests[0].arrival_s
+    if span <= 0:
+        raise ValueError("trace has no duration")
+    native_rate = (n - 1) / span
+    mean_bits = sum(model.cache_bytes(r.prompt_tokens) for r in requests) / n * 8
+    target_rate = args.load * capacity_bps(args, link_bps) / mean_bits
+    return target_rate / native_rate, native_rate, target_rate, mean_bits
+
+
 def pick_window(records, placement, model, window_s, step_s=0.1):
     """Return the start time of the busiest window, measured in bytes."""
     if not records:
@@ -81,6 +123,20 @@ def build(args):
     model = MODELS[args.model]
     requests, meta = load_trace(args.trace, duration=args.duration)
 
+    calib = None
+    if args.load is not None:
+        if args.rate_scale != 1.0:
+            raise ValueError("pass --load or --rate-scale, not both")
+        rs, native, target, mean_bits = rate_scale_for_load(
+            requests, model, args, args.link_bps)
+        args.rate_scale = rs
+        calib = {"target_load": args.load,
+                 "native_rate_req_s": native,
+                 "target_rate_req_s": target,
+                 "mean_cache_bits": mean_bits,
+                 "capacity_bps": capacity_bps(args, args.link_bps),
+                 "rate_scale_from_trace_mean": rs}
+
     placement = Placement(nodes=args.nodes, tp=args.tp,
                           n_prefill=args.prefill, n_decode=args.decode,
                           numbering=args.numbering)
@@ -94,6 +150,34 @@ def build(args):
     else:
         w0 = float(args.window_start)
     w1 = w0 + args.window
+
+    # The emitted window is the busiest slice, which runs above the trace
+    # mean, so a workload calibrated to a mean load of 0.5 would simulate at
+    # more like 0.57. Calibrate against the window actually emitted, not the
+    # whole trace, otherwise every quoted load is quietly wrong. One
+    # correction pass is enough: re-running the pool shifts the busiest
+    # window slightly, so this iterates until the window load is within a
+    # percent of the target or it gives up and reports what it got.
+    if calib is not None and args.calibrate_window:
+        cap = capacity_bps(args, args.link_bps)
+        for _ in range(8):
+            emitted = sum(model.cache_bytes(rec[0].prompt_tokens)
+                          for rec in records if w0 <= rec[3] < w1)
+            window_load = emitted * 8 / args.window / cap
+            if window_load <= 0:
+                break
+            calib["window_load_before"] = calib.get("window_load_before",
+                                                    window_load)
+            if abs(window_load - args.load) / args.load < 0.01:
+                break
+            args.rate_scale *= args.load / window_load
+            records = pool.run(requests, model, args.alpha_scale,
+                               args.rate_scale)
+            if args.window_start == "auto":
+                w0 = pick_window(records, placement, model, args.window)
+            w1 = w0 + args.window
+        calib["window_load_after"] = window_load
+        calib["rate_scale_final"] = args.rate_scale
 
     flows = []        # (src, dst, start_ps, size, meta dict)
     fid = 0
@@ -148,6 +232,11 @@ def build(args):
         "decode_instances": args.decode,
         "numbering": args.numbering,
         "rate_scale": args.rate_scale,
+        "target_load": args.load,
+        "link_bps": args.link_bps,
+        "capacity_bps": capacity_bps(args, args.link_bps),
+        "capacity_measured_at": "decode side, min(decode, prefill) hosts x link",
+        "calibration": calib,
         "alpha_scale": args.alpha_scale,
         "window_start_s": w0,
         "window_s": args.window,
@@ -222,6 +311,16 @@ def main(argv=None):
     ap.add_argument("--decode", type=int, default=3)
     ap.add_argument("--numbering", default="conventional",
                     choices=["conventional", "rail"])
+    ap.add_argument("--load", type=float, default=None,
+                    help="target offered load as a fraction of DECODE side "
+                         "capacity, e.g. 0.7. Sets --rate-scale for you")
+    ap.add_argument("--link-bps", type=float, default=DEFAULT_LINK_BPS,
+                    help="per host link speed, default 100e9 to match "
+                         "fat_tree_128_*.topo")
+    ap.add_argument("--no-calibrate-window", dest="calibrate_window",
+                    action="store_false",
+                    help="calibrate load on the whole trace rather than on "
+                         "the window actually emitted")
     ap.add_argument("--rate-scale", type=float, default=1.0,
                     help="compress arrivals by this factor (M6 sets it from "
                          "a target load)")
@@ -255,6 +354,23 @@ def main(argv=None):
     print("   offered    %.0f Gbps over %d prefill hosts"
           % (config["bytes_total"] * 8 / span / 1e9,
              config["prefill_instances"] * config["tp"]))
+    cap = config["capacity_bps"]
+    print("   load       %.3f of capacity (%.1f Gbps of %.0f Gbps, decode side)"
+          % (config["bytes_total"] * 8 / span / cap,
+             config["bytes_total"] * 8 / span / 1e9, cap / 1e9))
+    if config["calibration"]:
+        c = config["calibration"]
+        achieved = config["bytes_total"] * 8 / span / cap
+        print("   calibrated target %.2f, trace-mean scale x%.1f, final x%.1f"
+              % (c["target_load"], c["rate_scale_from_trace_mean"],
+                 c.get("rate_scale_final", c["rate_scale_from_trace_mean"])))
+        if abs(achieved - c["target_load"]) / c["target_load"] > 0.02:
+            print("   WARNING: achieved load %.3f is more than 2 percent off "
+                  "the %.2f target. A window this short holds too few "
+                  "requests for the load to be continuous, so it cannot be "
+                  "hit exactly. Use a longer --window or quote the achieved "
+                  "load, not the target."
+                  % (achieved, c["target_load"]))
     print("   verify     %d checks passed" % 8)
     return 0
 
