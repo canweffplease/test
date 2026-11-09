@@ -427,7 +427,10 @@ void EqdsSrc::connectPort(uint32_t port_num,
         _flow._name = _name;
 
         if (start_time != TRIGGER_START) {
-            eventlist().sourceIsPending(*this, timeFromUs((uint32_t)start_time));
+            // FIX: same double unit conversion as roce.cpp, and the
+            // uint32_t cast also truncated any start past 4.29 ms.
+            // start_time is already in picoseconds.
+            eventlist().sourceIsPending(*this, start_time);
         }
     }
     assert(_sink == &sink);

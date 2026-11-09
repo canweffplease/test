@@ -146,3 +146,61 @@ control result, which is a useful sanity check: the same policy on the same
 traffic gets the same distance from floor regardless of link speed. That is
 exactly what normalizing to the floor is supposed to buy us, and it only
 worked once the floor was right.
+
+---
+
+## Flow start times were multiplied by a million
+
+`roce.cpp` and `eqds.cpp`, found while testing the first generated workload.
+
+A connection matrix line carries a start time in picoseconds. The parser in
+`connection_matrix.cpp` says so in a comment on the line that reads it,
+`c->start = start; // start is in picoseconds already`. Both transports then
+passed that value through `timeFromUs()` on the way to the event list, which
+multiplies by 1e6 a second time.
+
+```cpp
+// roce.cpp, before
+eventlist().sourceIsPending(*this, timeFromUs((double)starttime));
+// after
+eventlist().sourceIsPending(*this, starttime);
+```
+
+`eqds.cpp` had the same conversion plus a `(uint32_t)` cast, which also
+truncates any start time past 4.29 ms.
+
+A flow asking to start 1 ms in was scheduled 1000 seconds in, far outside any
+simulated window, so it never sent a packet. The run completed in about a
+second and reported zero finished flows and `New: 0 Rtx: 0`.
+
+This stayed invisible for the whole project because every hand written
+workload used `start 0`, and zero times a million is still zero. It surfaced
+the moment the generator emitted real arrival times.
+
+Confirmed by taking `kv128_conv.cm`, changing nothing but `start 0` to
+`start 1000000000` (1 ms), and rerunning.
+
+| | last shard |
+|---|---|
+| start 0 | 40924.2 us |
+| start 1 ms | 41924.2 us |
+
+Exactly 1000 us later, which is the delay that was asked for.
+
+---
+
+## Completion lines did not carry the connection matrix flow id
+
+`roce.cpp` printed `get_id()`, a global object counter, and `hpcc.cpp`
+printed nothing at all. `eqds.cpp` already printed `flowId()`.
+
+With a hand written workload each flow had its own source and destination
+pair, so the name `Roce_3_67` identified it. A generated workload puts many
+flows between the same pair, so the name is ambiguous and a completion line
+cannot be matched back to the request that produced it. Without that match
+there is no way to group shards into requests, and the request completion
+time is the whole point, since a decode instance waits for its slowest
+shard.
+
+Both now print `flowId`, which `main_roce.cpp` and `main_hpcc.cpp` already
+set from the connection matrix. `parse.py` uses it.

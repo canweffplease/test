@@ -23,6 +23,11 @@ Check things off here. Owner column is a suggestion, swap as needed.
 - [ ] Find why `set_priority` is commented out in `main_eqds.cpp` and
       `main_uec.cpp`, and whether uncommenting works — Chris
 
+## Workload generator
+
+Full build plan in `docs/GENERATOR_PLAN.md`, milestones M1 to M7.
+M6 (the offered-load knob) is what unblocks E2, E3 and E5.
+
 ## Week 2
 
 - [ ] Generator emits valid `.cm` plus a deadline metadata file — Vasili
