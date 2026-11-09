@@ -1,5 +1,5 @@
-diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/data_collector.h /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/data_collector.h
---- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/data_collector.h	2026-11-09 00:12:31.694001290 +0000
+diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/data_collector.h /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/data_collector.h
+--- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/data_collector.h	2026-11-09 00:41:48.903000448 +0000
 +++ /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/data_collector.h	2026-11-06 21:11:27.734255620 +0000
 @@ -1,6 +1,8 @@
  #ifndef HTSIM_SIM_DATA_COLLECTOR_H_
@@ -10,9 +10,9 @@ diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=O
  #include <fstream>
  #include <iostream>
  #include <map>
-Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/datacenter: experiments
-diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/datacenter/fat_tree_topology.cpp /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/datacenter/fat_tree_topology.cpp
---- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/datacenter/fat_tree_topology.cpp	2026-11-09 00:12:31.725001290 +0000
+Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/datacenter: experiments
+diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/datacenter/fat_tree_topology.cpp /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/datacenter/fat_tree_topology.cpp
+--- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/datacenter/fat_tree_topology.cpp	2026-11-09 00:41:48.934000448 +0000
 +++ /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/datacenter/fat_tree_topology.cpp	2026-11-06 21:22:31.494571924 +0000
 @@ -418,6 +418,13 @@
  }
@@ -42,12 +42,12 @@ Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/ht
 Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/datacenter: htsim_roce
 Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/datacenter: idmap.txt
 Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/datacenter: logout.dat
-Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/datacenter: out.tmp
-Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/datacenter: results
-Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/datacenter/topologies: dragonfly
-Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/datacenter/topologies: slimfly
-diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/dcqcn.cpp /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/dcqcn.cpp
---- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/dcqcn.cpp	2026-11-09 00:12:31.774001290 +0000
+Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/datacenter: out.tmp
+Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/datacenter: results
+Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/datacenter/topologies: dragonfly
+Only in /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/datacenter/topologies: slimfly
+diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/dcqcn.cpp /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/dcqcn.cpp
+--- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/dcqcn.cpp	2026-11-09 00:41:48.983000448 +0000
 +++ /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/dcqcn.cpp	2026-11-06 20:47:34.868329413 +0000
 @@ -63,11 +63,11 @@
      _byte_counter = 0;
@@ -92,8 +92,8 @@ diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=O
          reschedule = true;
      }    
  
-diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/eqds.cpp /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/eqds.cpp
---- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/eqds.cpp	2026-11-09 00:12:31.774001290 +0000
+diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/eqds.cpp /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/eqds.cpp
+--- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/eqds.cpp	2026-11-09 00:41:48.983000448 +0000
 +++ /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/eqds.cpp	2026-11-09 00:01:16.218339012 +0000
 @@ -427,7 +427,10 @@
          _flow._name = _name;
@@ -107,8 +107,20 @@ diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=O
          }
      }
      assert(_sink == &sink);
-diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/loggertypes.h /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/loggertypes.h
---- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/loggertypes.h	2026-11-09 00:12:31.781001290 +0000
+diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/hpcc.cpp /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/hpcc.cpp
+--- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/hpcc.cpp	2026-11-09 00:41:48.984000448 +0000
++++ /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/hpcc.cpp	2026-11-09 00:37:33.023017341 +0000
+@@ -208,7 +208,7 @@
+     if (_logger) _logger->logHPCC(*this, HPCCLogger::HPCC_RCV);
+ 
+     if (ackno >= _flow_size){
+-        cout << "Flow " << _name << " finished at " << timeAsUs(eventlist().now()) << " total bytes " << ackno << endl;
++        cout << "Flow " << _name << " flowId " << _flow.flow_id() << " finished at " << timeAsUs(eventlist().now()) << " total bytes " << ackno << endl;
+         _done = true;
+         if (_end_trigger) {
+             _end_trigger->activate();
+diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/loggertypes.h /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/loggertypes.h
+--- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/loggertypes.h	2026-11-09 00:41:48.990000448 +0000
 +++ /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/loggertypes.h	2026-11-06 21:11:27.735668164 +0000
 @@ -1,244 +1,246 @@
 -// -*- c-basic-offset: 4; indent-tabs-mode: nil -*-        
@@ -601,9 +613,9 @@ diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=O
 +};
 +
 +#endif
-diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/roce.cpp /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/roce.cpp
---- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.Rtw8c37U7k/up/htsim/sim/roce.cpp	2026-11-09 00:12:31.782001290 +0000
-+++ /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/roce.cpp	2026-11-09 00:01:16.215823061 +0000
+diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=OUR_CHANGES.md' /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/roce.cpp /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/roce.cpp
+--- /sessions/rcw-01hnszumedpnv2lyaqzt46vu/tmp/tmp.kejdSYvgPN/up/htsim/sim/roce.cpp	2026-11-09 00:41:48.991000448 +0000
++++ /sessions/rcw-01hnszumedpnv2lyaqzt46vu/mnt/Desktop/6250-project/HTSIM/htsim/sim/roce.cpp	2026-11-09 00:37:33.020958459 +0000
 @@ -131,7 +131,14 @@
  
      if (starttime != TRIGGER_START) {
@@ -620,7 +632,22 @@ diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=O
          //startflow();
      }
      else cout << "TRIGGER START " << _nodename << endl; 
-@@ -225,7 +232,7 @@
+@@ -205,7 +212,13 @@
+         cout << "Src " << get_id() << " ackno " << ackno << endl;
+ 
+     if (ackno * _mss >= _flow_size){
+-        cout << "Flow " << _name << " " << get_id() << " finished at " << timeAsUs(eventlist().now()) << " total bytes " << ackno << endl;
++        // get_id() is a global object counter, not the flow id from the
++        // connection matrix. With a generated workload many flows share
++        // the same src->dst pair and the same name, so without the
++        // connection matrix flow id a completion line cannot be matched
++        // back to the request that produced it. eqds.cpp already prints
++        // flowId(); this makes roce consistent with it.
++        cout << "Flow " << _name << " flowId " << _flow.flow_id() << " " << get_id() << " finished at " << timeAsUs(eventlist().now()) << " total bytes " << ackno << endl;
+         _done = true;
+         if (_end_trigger) {
+             _end_trigger->activate();
+@@ -225,7 +238,7 @@
          //we are allowed to send!
          //assert(_state_send != READY);
          _state_send = READY;
@@ -629,7 +656,7 @@ diff -ru '--exclude=.git' '--exclude=build' '--exclude=build-linux' '--exclude=O
          eventlist().sourceIsPendingRel(*this,0);
      }
  }
-@@ -322,7 +329,7 @@
+@@ -322,7 +335,7 @@
          if (_log_me) 
              cout << "Src " << get_id() << " paused\n";
  

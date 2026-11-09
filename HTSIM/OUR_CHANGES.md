@@ -186,3 +186,21 @@ Confirmed by taking `kv128_conv.cm`, changing nothing but `start 0` to
 | start 1 ms | 41924.2 us |
 
 Exactly 1000 us later, which is the delay that was asked for.
+
+---
+
+## Completion lines did not carry the connection matrix flow id
+
+`roce.cpp` printed `get_id()`, a global object counter, and `hpcc.cpp`
+printed nothing at all. `eqds.cpp` already printed `flowId()`.
+
+With a hand written workload each flow had its own source and destination
+pair, so the name `Roce_3_67` identified it. A generated workload puts many
+flows between the same pair, so the name is ambiguous and a completion line
+cannot be matched back to the request that produced it. Without that match
+there is no way to group shards into requests, and the request completion
+time is the whole point, since a decode instance waits for its slowest
+shard.
+
+Both now print `flowId`, which `main_roce.cpp` and `main_hpcc.cpp` already
+set from the connection matrix. `parse.py` uses it.

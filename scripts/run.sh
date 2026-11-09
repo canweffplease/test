@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Run one simulation and save a named result.
 #
-#   ./scripts/run.sh <cc> <topo> <load-label> <traffic-matrix>
+#   ./scripts/run.sh <cc> <topo> <load-label> <traffic-matrix> [queue_pkts]
+#
+# <queue_pkts> overrides the per-topology default buffer size, in packets of
+# 4000 bytes, so a buffer sweep is a loop rather than an edit. -q 500 is
+# 2 MB per port and -q 2000 is 8 MB, roughly a shallow buffer and a deep
+# buffer switch. Report MB per port in the paper, not htsim's packet count.
 #
 #   <cc>    dcqcn | hpcc | eqds | roce
 #   <topo>  default            16-node auto-generated fat tree
@@ -20,6 +25,7 @@ CC=${1:?congestion control: dcqcn | hpcc | eqds | roce}
 TOPO=${2:-default}
 LOAD=${3:-load100}
 TM=${4:?path to .cm traffic matrix}
+Q_OVERRIDE=${5:-}
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${HTSIM_BUILD:-build}"
@@ -64,6 +70,14 @@ if [ -n "$TM_NODES" ] && [ "$TM_NODES" != "$NODES" ]; then
   echo "node mismatch: topology $TOPO has $NODES, matrix has $TM_NODES"; exit 1
 fi
 
+# explicit buffer size wins over the per-topology default
+if [ -n "$Q_OVERRIDE" ]; then
+  Q="$Q_OVERRIDE"
+  TAG="${TAG}_q${Q}"
+  LOG="$HERE/results/${TAG}.log"
+  CSV="$HERE/results/${TAG}.csv"
+fi
+
 COMMON="-nodes $NODES $TOPOARG -strat ecmp_host -paths 16 -linkspeed 400000 -end 2000000 -q $Q"
 
 case "$CC" in
@@ -81,7 +95,7 @@ esac
 [ -x "$EXE" ] || { echo "missing binary $EXE - run ./setup.sh first"; exit 1; }
 
 cd "$HERE/HTSIM/htsim/sim/datacenter"
-echo "running $TAG ... (link ${GBPS} Gbps)"
+echo "running $TAG ... (link ${GBPS} Gbps, buffer ${Q} pkts = $((Q*4000/1000000)) MB/port)"
 START=$(date +%s)
 $EXE $COMMON $ARGS -tm "$TM_ABS" > "$LOG" 2>&1 || true
 echo "  wall $(( $(date +%s)-START ))s"

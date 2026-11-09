@@ -212,7 +212,13 @@ void RoceSrc::processAck(const RoceAck& ack) {
         cout << "Src " << get_id() << " ackno " << ackno << endl;
 
     if (ackno * _mss >= _flow_size){
-        cout << "Flow " << _name << " " << get_id() << " finished at " << timeAsUs(eventlist().now()) << " total bytes " << ackno << endl;
+        // get_id() is a global object counter, not the flow id from the
+        // connection matrix. With a generated workload many flows share
+        // the same src->dst pair and the same name, so without the
+        // connection matrix flow id a completion line cannot be matched
+        // back to the request that produced it. eqds.cpp already prints
+        // flowId(); this makes roce consistent with it.
+        cout << "Flow " << _name << " flowId " << _flow.flow_id() << " " << get_id() << " finished at " << timeAsUs(eventlist().now()) << " total bytes " << ackno << endl;
         _done = true;
         if (_end_trigger) {
             _end_trigger->activate();
