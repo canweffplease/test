@@ -78,11 +78,17 @@ if [ -n "$Q_OVERRIDE" ]; then
   CSV="$HERE/results/${TAG}.csv"
 fi
 
+# PFC pause and resume thresholds, in packets. Defaults scale with the
+# buffer: pausing at 150 packets when the queue holds 2000 means the fabric
+# spends its life paused, and pausing at 150 when it holds 500 leaves 350
+# packets of headroom for in flight data.
+PFC="${HTSIM_PFC:-$(( Q*16/100 )) $(( Q*30/100 ))}"
+
 COMMON="-nodes $NODES $TOPOARG -strat ecmp_host -paths 16 -linkspeed 400000 -end 2000000 -q $Q"
 
 case "$CC" in
-  dcqcn) EXE="$BIN/htsim_roce"; ARGS="-dcqcn 100 -pfc_thresholds 80 150" ;;
-  roce)  EXE="$BIN/htsim_roce"; ARGS="-pfc_thresholds 80 150" ;;
+  dcqcn) EXE="$BIN/htsim_roce"; ARGS="-dcqcn ${HTSIM_ECN:-100} -pfc_thresholds $PFC" ;;
+  roce)  EXE="$BIN/htsim_roce"; ARGS="-pfc_thresholds $PFC" ;;
   hpcc)  EXE="$BIN/htsim_hpcc"; ARGS=""
          [ "$TOPO" != "default" ] && { echo "htsim_hpcc does not accept -topo"; exit 1; } ;;
   eqds)  EXE="$BIN/htsim_eqds"; ARGS=""
@@ -95,7 +101,7 @@ esac
 [ -x "$EXE" ] || { echo "missing binary $EXE - run ./setup.sh first"; exit 1; }
 
 cd "$HERE/HTSIM/htsim/sim/datacenter"
-echo "running $TAG ... (link ${GBPS} Gbps, buffer ${Q} pkts = $((Q*4000/1000000)) MB/port)"
+echo "running $TAG ... (link ${GBPS} Gbps, buffer ${Q} pkts = $((Q*4000/1000000)) MB/port, pfc ${PFC})"
 START=$(date +%s)
 $EXE $COMMON $ARGS -tm "$TM_ABS" > "$LOG" 2>&1 || true
 echo "  wall $(( $(date +%s)-START ))s"
