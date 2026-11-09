@@ -131,7 +131,14 @@ void RoceSrc::connect(Route* routeout, Route* routeback, RoceSink& sink, simtime
 
     if (starttime != TRIGGER_START) {
         //cout << "scheduling start at " << starttime << " now is " << timeAsUs(eventlist().now())<< endl;
-        eventlist().sourceIsPending(*this,timeFromUs((double)starttime));
+        // FIX: starttime arrives from the connection matrix already in
+        // picoseconds (connection_matrix.cpp: "start is in picoseconds
+        // already"), and timeFromUs multiplied it by 1e6 again. Any flow
+        // with a nonzero start was scheduled a million times too late, so it
+        // never ran inside the simulated window and the run produced zero
+        // completed flows. Invisible until now because every hand written
+        // workload used start 0.
+        eventlist().sourceIsPending(*this, starttime);
         //startflow();
     }
     else cout << "TRIGGER START " << _nodename << endl; 
